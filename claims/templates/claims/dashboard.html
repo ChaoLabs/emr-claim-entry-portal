@@ -1,0 +1,70 @@
+{% extends "claims/base.html" %}
+
+{% block title %}Dashboard | EMRTS Claim Entry Portal{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2 class="page-title">Claim Entry Dashboard</h2>
+    <p class="page-subtitle">
+        Development dashboard for CMS-1500 claim capture and review.
+    </p>
+
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 28px;">
+        <div style="border: 1px solid var(--border); border-radius: 8px; padding: 18px;">
+            <div class="muted">Total Claims</div>
+            <div style="font-size: 30px; font-weight: 700; margin-top: 6px;">{{ claim_count }}</div>
+        </div>
+
+        <div style="border: 1px solid var(--border); border-radius: 8px; padding: 18px;">
+            <div class="muted">Draft Claims</div>
+            <div style="font-size: 30px; font-weight: 700; margin-top: 6px;">{{ draft_count }}</div>
+        </div>
+
+        <div style="border: 1px solid var(--border); border-radius: 8px; padding: 18px;">
+            <div class="muted">Ready for Review</div>
+            <div style="font-size: 30px; font-weight: 700; margin-top: 6px;">{{ ready_for_review_count }}</div>
+        </div>
+    </div>
+
+    <p>
+        <a class="button" href="{% url 'claims:capture_claim' %}">Capture New CMS-1500 Claim</a>
+    </p>
+
+    <h3 style="margin-top: 32px;">Recent Claims</h3>
+
+    {% if recent_claims %}
+        <table style="width: 100%; border-collapse: collapse; margin-top: 12px;">
+            <thead>
+                <tr style="border-bottom: 1px solid var(--border); text-align: left;">
+                    <th style="padding: 10px;">Claim Number</th>
+                    <th style="padding: 10px;">Patient</th>
+                    <th style="padding: 10px;">Payer</th>
+                    <th style="padding: 10px;">Status</th>
+                    <th style="padding: 10px;">Total Charge</th>
+                    <th style="padding: 10px;">Created</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for claim in recent_claims %}
+                    <tr style="border-bottom: 1px solid var(--border);">
+                        <td style="padding: 10px;">
+                            <a href="{% url 'claims:claim_detail' claim.id %}">
+                                {{ claim.claim_number|default:claim.id }}
+                            </a>
+                        </td>
+                        <td style="padding: 10px;">{{ claim.patient }}</td>
+                        <td style="padding: 10px;">{{ claim.payer }}</td>
+                        <td style="padding: 10px;">{{ claim.get_status_display }}</td>
+                        <td style="padding: 10px;">${{ claim.total_charge_amount }}</td>
+                        <td style="padding: 10px;">{{ claim.created_at|date:"Y-m-d H:i" }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="muted">
+            No claims have been captured yet. Use the capture form to create the first development claim.
+        </p>
+    {% endif %}
+</div>
+{% endblock %}

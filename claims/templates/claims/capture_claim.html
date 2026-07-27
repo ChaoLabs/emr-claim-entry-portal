@@ -1,0 +1,195 @@
+{% extends "claims/base.html" %}
+
+{% block title %}New CMS-1500 Claim | EMRTS Claim Entry Portal{% endblock %}
+
+{% block content %}
+<style>
+    .form-section {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 18px;
+        margin-bottom: 20px;
+        background: #ffffff;
+    }
+
+    .form-section h3 {
+        margin: 0 0 14px;
+        color: var(--primary);
+        font-size: 18px;
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px 18px;
+    }
+
+    .form-field label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 5px;
+    }
+
+    .form-field input,
+    .form-field select,
+    .form-field textarea {
+        width: 100%;
+        padding: 9px 10px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        font-size: 14px;
+    }
+
+    .form-field .helptext {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 4px;
+    }
+
+    .errorlist {
+        color: var(--danger);
+        margin: 6px 0;
+        padding-left: 18px;
+    }
+
+    .full-width {
+        grid-column: 1 / -1;
+    }
+
+    .form-actions {
+        margin-top: 24px;
+        display: flex;
+        gap: 12px;
+        align-items: center;
+    }
+</style>
+
+<div class="card">
+    <h2 class="page-title">Capture New CMS-1500 Claim</h2>
+    <p class="page-subtitle">
+        Development form for entering core CMS-1500 professional claim information.
+        Do not enter real PHI.
+    </p>
+
+    <form method="post" novalidate>
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+            <div class="form-section">
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
+
+        <section class="form-section">
+            <h3>Patient Information</h3>
+            <div class="form-grid">
+                <div class="form-field">{{ form.patient_first_name.label_tag }}{{ form.patient_first_name }}{{ form.patient_first_name.errors }}</div>
+                <div class="form-field">{{ form.patient_last_name.label_tag }}{{ form.patient_last_name }}{{ form.patient_last_name.errors }}</div>
+                <div class="form-field">{{ form.patient_middle_name.label_tag }}{{ form.patient_middle_name }}{{ form.patient_middle_name.errors }}</div>
+                <div class="form-field">{{ form.patient_date_of_birth.label_tag }}{{ form.patient_date_of_birth }}{{ form.patient_date_of_birth.errors }}</div>
+                <div class="form-field">{{ form.patient_sex.label_tag }}{{ form.patient_sex }}{{ form.patient_sex.errors }}</div>
+                <div class="form-field">{{ form.patient_phone_number.label_tag }}{{ form.patient_phone_number }}{{ form.patient_phone_number.errors }}</div>
+                <div class="form-field full-width">{{ form.patient_address_line_1.label_tag }}{{ form.patient_address_line_1 }}{{ form.patient_address_line_1.errors }}</div>
+                <div class="form-field full-width">{{ form.patient_address_line_2.label_tag }}{{ form.patient_address_line_2 }}{{ form.patient_address_line_2.errors }}</div>
+                <div class="form-field">{{ form.patient_city.label_tag }}{{ form.patient_city }}{{ form.patient_city.errors }}</div>
+                <div class="form-field">{{ form.patient_state.label_tag }}{{ form.patient_state }}{{ form.patient_state.errors }}</div>
+                <div class="form-field">{{ form.patient_zip_code.label_tag }}{{ form.patient_zip_code }}{{ form.patient_zip_code.errors }}</div>
+            </div>
+        </section>
+
+        <section class="form-section">
+            <h3>Insured / Subscriber Information</h3>
+            <div class="form-grid">
+                <div class="form-field full-width">
+                    <label>{{ form.insured_same_as_patient }} {{ form.insured_same_as_patient.label }}</label>
+                    {{ form.insured_same_as_patient.errors }}
+                </div>
+                <div class="form-field">{{ form.insured_first_name.label_tag }}{{ form.insured_first_name }}{{ form.insured_first_name.errors }}</div>
+                <div class="form-field">{{ form.insured_last_name.label_tag }}{{ form.insured_last_name }}{{ form.insured_last_name.errors }}</div>
+                <div class="form-field">{{ form.insured_middle_name.label_tag }}{{ form.insured_middle_name }}{{ form.insured_middle_name.errors }}</div>
+                <div class="form-field">{{ form.insured_date_of_birth.label_tag }}{{ form.insured_date_of_birth }}{{ form.insured_date_of_birth.errors }}</div>
+                <div class="form-field">{{ form.insured_sex.label_tag }}{{ form.insured_sex }}{{ form.insured_sex.errors }}</div>
+                <div class="form-field">{{ form.relationship_to_patient.label_tag }}{{ form.relationship_to_patient }}{{ form.relationship_to_patient.errors }}</div>
+                <div class="form-field">{{ form.insured_id_number.label_tag }}{{ form.insured_id_number }}{{ form.insured_id_number.errors }}</div>
+                <div class="form-field">{{ form.group_number.label_tag }}{{ form.group_number }}{{ form.group_number.errors }}</div>
+            </div>
+        </section>
+
+        <section class="form-section">
+            <h3>Payer Information</h3>
+            <div class="form-grid">
+                <div class="form-field">{{ form.payer_name.label_tag }}{{ form.payer_name }}{{ form.payer_name.errors }}</div>
+                <div class="form-field">{{ form.payer_type.label_tag }}{{ form.payer_type }}{{ form.payer_type.errors }}</div>
+                <div class="form-field">{{ form.payer_identifier.label_tag }}{{ form.payer_identifier }}{{ form.payer_identifier.errors }}</div>
+                <div class="form-field">{{ form.medicare_administrative_contractor.label_tag }}{{ form.medicare_administrative_contractor }}{{ form.medicare_administrative_contractor.errors }}</div>
+            </div>
+        </section>
+
+        <section class="form-section">
+            <h3>Provider Information</h3>
+            <div class="form-grid">
+                <div class="form-field full-width">{{ form.billing_provider_name.label_tag }}{{ form.billing_provider_name }}{{ form.billing_provider_name.errors }}</div>
+                <div class="form-field">{{ form.billing_provider_npi.label_tag }}{{ form.billing_provider_npi }}{{ form.billing_provider_npi.errors }}</div>
+                <div class="form-field">{{ form.billing_provider_taxonomy_code.label_tag }}{{ form.billing_provider_taxonomy_code }}{{ form.billing_provider_taxonomy_code.errors }}</div>
+                <div class="form-field">{{ form.billing_provider_tax_id.label_tag }}{{ form.billing_provider_tax_id }}{{ form.billing_provider_tax_id.errors }}</div>
+                <div class="form-field full-width">{{ form.billing_provider_address_line_1.label_tag }}{{ form.billing_provider_address_line_1 }}{{ form.billing_provider_address_line_1.errors }}</div>
+                <div class="form-field">{{ form.billing_provider_city.label_tag }}{{ form.billing_provider_city }}{{ form.billing_provider_city.errors }}</div>
+                <div class="form-field">{{ form.billing_provider_state.label_tag }}{{ form.billing_provider_state }}{{ form.billing_provider_state.errors }}</div>
+                <div class="form-field">{{ form.billing_provider_zip_code.label_tag }}{{ form.billing_provider_zip_code }}{{ form.billing_provider_zip_code.errors }}</div>
+                <div class="form-field">{{ form.rendering_provider_first_name.label_tag }}{{ form.rendering_provider_first_name }}{{ form.rendering_provider_first_name.errors }}</div>
+                <div class="form-field">{{ form.rendering_provider_last_name.label_tag }}{{ form.rendering_provider_last_name }}{{ form.rendering_provider_last_name.errors }}</div>
+                <div class="form-field">{{ form.rendering_provider_npi.label_tag }}{{ form.rendering_provider_npi }}{{ form.rendering_provider_npi.errors }}</div>
+            </div>
+        </section>
+
+        <section class="form-section">
+            <h3>Claim Header</h3>
+            <div class="form-grid">
+                <div class="form-field">{{ form.claim_number.label_tag }}{{ form.claim_number }}{{ form.claim_number.errors }}</div>
+                <div class="form-field">{{ form.service_start_date.label_tag }}{{ form.service_start_date }}{{ form.service_start_date.errors }}</div>
+                <div class="form-field">{{ form.service_end_date.label_tag }}{{ form.service_end_date }}{{ form.service_end_date.errors }}</div>
+            </div>
+        </section>
+
+        <section class="form-section">
+            <h3>Diagnosis Information</h3>
+            <div class="form-grid">
+                <div class="form-field">{{ form.diagnosis_code_1.label_tag }}{{ form.diagnosis_code_1 }}{{ form.diagnosis_code_1.errors }}</div>
+                <div class="form-field">{{ form.diagnosis_description_1.label_tag }}{{ form.diagnosis_description_1 }}{{ form.diagnosis_description_1.errors }}</div>
+                <div class="form-field">{{ form.diagnosis_code_2.label_tag }}{{ form.diagnosis_code_2 }}{{ form.diagnosis_code_2.errors }}</div>
+                <div class="form-field">{{ form.diagnosis_description_2.label_tag }}{{ form.diagnosis_description_2 }}{{ form.diagnosis_description_2.errors }}</div>
+                <div class="form-field">{{ form.diagnosis_code_3.label_tag }}{{ form.diagnosis_code_3 }}{{ form.diagnosis_code_3.errors }}</div>
+                <div class="form-field">{{ form.diagnosis_description_3.label_tag }}{{ form.diagnosis_description_3 }}{{ form.diagnosis_description_3.errors }}</div>
+                <div class="form-field">{{ form.diagnosis_code_4.label_tag }}{{ form.diagnosis_code_4 }}{{ form.diagnosis_code_4.errors }}</div>
+                <div class="form-field">{{ form.diagnosis_description_4.label_tag }}{{ form.diagnosis_description_4 }}{{ form.diagnosis_description_4.errors }}</div>
+            </div>
+        </section>
+
+        <section class="form-section">
+            <h3>Service Line Information</h3>
+            <div class="form-grid">
+                <div class="form-field">{{ form.service_line_from_date.label_tag }}{{ form.service_line_from_date }}{{ form.service_line_from_date.errors }}</div>
+                <div class="form-field">{{ form.service_line_to_date.label_tag }}{{ form.service_line_to_date }}{{ form.service_line_to_date.errors }}</div>
+                <div class="form-field">{{ form.place_of_service.label_tag }}{{ form.place_of_service }}{{ form.place_of_service.errors }}</div>
+                <div class="form-field">{{ form.procedure_code.label_tag }}{{ form.procedure_code }}{{ form.procedure_code.errors }}</div>
+                <div class="form-field">{{ form.modifier_1.label_tag }}{{ form.modifier_1 }}{{ form.modifier_1.errors }}</div>
+                <div class="form-field">{{ form.modifier_2.label_tag }}{{ form.modifier_2 }}{{ form.modifier_2.errors }}</div>
+                <div class="form-field">{{ form.modifier_3.label_tag }}{{ form.modifier_3 }}{{ form.modifier_3.errors }}</div>
+                <div class="form-field">{{ form.modifier_4.label_tag }}{{ form.modifier_4 }}{{ form.modifier_4.errors }}</div>
+                <div class="form-field">{{ form.diagnosis_pointer_1.label_tag }}{{ form.diagnosis_pointer_1 }}{{ form.diagnosis_pointer_1.errors }}</div>
+                <div class="form-field">{{ form.diagnosis_pointer_2.label_tag }}{{ form.diagnosis_pointer_2 }}{{ form.diagnosis_pointer_2.errors }}</div>
+                <div class="form-field">{{ form.diagnosis_pointer_3.label_tag }}{{ form.diagnosis_pointer_3 }}{{ form.diagnosis_pointer_3.errors }}</div>
+                <div class="form-field">{{ form.diagnosis_pointer_4.label_tag }}{{ form.diagnosis_pointer_4 }}{{ form.diagnosis_pointer_4.errors }}</div>
+                <div class="form-field">{{ form.charge_amount.label_tag }}{{ form.charge_amount }}{{ form.charge_amount.errors }}</div>
+                <div class="form-field">{{ form.units.label_tag }}{{ form.units }}{{ form.units.errors }}</div>
+            </div>
+        </section>
+
+        <div class="form-actions">
+            <button type="submit" class="button">Save Claim</button>
+            <a href="{% url 'claims:dashboard' %}" class="muted">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}EMRTS Claim Entry Portal{% endblock %}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <style>
+        :root {
+            --bg: #f4f6f8;
+            --card: #ffffff;
+            --text: #17202a;
+            --muted: #6b7280;
+            --border: #d9dee7;
+            --primary: #1f4e79;
+            --primary-dark: #173a5a;
+            --success: #1f7a4d;
+            --warning: #a16207;
+            --danger: #b42318;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        header {
+            background: var(--primary);
+            color: white;
+            padding: 18px 32px;
+            border-bottom: 4px solid var(--primary-dark);
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 22px;
+            letter-spacing: 0.2px;
+        }
+
+        header p {
+            margin: 6px 0 0;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        nav {
+            background: white;
+            border-bottom: 1px solid var(--border);
+            padding: 12px 32px;
+        }
+
+        nav a {
+            color: var(--primary);
+            font-weight: 600;
+            text-decoration: none;
+            margin-right: 22px;
+        }
+
+        nav a:hover {
+            text-decoration: underline;
+        }
+
+        main {
+            max-width: 1180px;
+            margin: 28px auto;
+            padding: 0 24px;
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+        }
+
+        .page-title {
+            margin: 0 0 8px;
+            font-size: 26px;
+        }
+
+        .page-subtitle {
+            margin: 0 0 24px;
+            color: var(--muted);
+        }
+
+        .messages {
+            margin-bottom: 18px;
+        }
+
+        .message {
+            padding: 12px 14px;
+            border-radius: 8px;
+            background: #e8f5ee;
+            color: var(--success);
+            border: 1px solid #b7e0c6;
+            margin-bottom: 10px;
+        }
+
+        .button {
+            display: inline-block;
+            background: var(--primary);
+            color: white;
+            padding: 10px 14px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+        }
+
+        .button:hover {
+            background: var(--primary-dark);
+        }
+
+        .muted {
+            color: var(--muted);
+        }
+
+        footer {
+            color: var(--muted);
+            font-size: 12px;
+            text-align: center;
+            padding: 28px 0;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>EMRTS Electronic Claim Entry Portal</h1>
+        <p>CMS-1500 information capture and claim preparation workflow</p>
+    </header>
+
+    <nav>
+        <a href="{% url 'claims:dashboard' %}">Dashboard</a>
+        <a href="{% url 'claims:capture_claim' %}">New CMS-1500 Claim</a>
+        <a href="{% url 'admin:index' %}">Admin</a>
+    </nav>
+
+    <main>
+        {% if messages %}
+            <div class="messages">
+                {% for message in messages %}
+                    <div class="message">{{ message }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer>
+        Development demo only. Do not enter real PHI.
+    </footer>
+</body>
+</html>

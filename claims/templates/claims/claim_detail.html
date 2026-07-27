@@ -1,0 +1,291 @@
+{% extends "claims/base.html" %}
+
+{% block title %}Claim Detail | EMRTS Claim Entry Portal{% endblock %}
+
+{% block content %}
+<style>
+    .detail-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+        margin-bottom: 22px;
+    }
+
+    .detail-section {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 18px;
+        background: #ffffff;
+        margin-bottom: 20px;
+    }
+
+    .detail-section h3 {
+        margin: 0 0 14px;
+        color: var(--primary);
+        font-size: 18px;
+    }
+
+    .field-row {
+        margin-bottom: 8px;
+    }
+
+    .field-label {
+        font-weight: 700;
+        color: var(--muted);
+        display: inline-block;
+        min-width: 160px;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+    }
+
+    th,
+    td {
+        padding: 10px;
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+        vertical-align: top;
+    }
+
+    th {
+        color: var(--muted);
+        font-weight: 700;
+    }
+
+    .status-pill {
+        display: inline-block;
+        padding: 4px 9px;
+        border-radius: 999px;
+        background: #eef4fb;
+        color: var(--primary);
+        font-weight: 700;
+        font-size: 12px;
+    }
+
+    .actions {
+        margin-top: 22px;
+        display: flex;
+        gap: 14px;
+        align-items: center;
+    }
+</style>
+
+<div class="card">
+    <h2 class="page-title">Claim Detail</h2>
+    <p class="page-subtitle">
+        Captured CMS-1500 claim information for development review.
+    </p>
+
+    <div class="detail-section">
+        <h3>Claim Summary</h3>
+        <div class="detail-grid">
+            <div class="field-row">
+                <span class="field-label">Claim Number:</span>
+                {{ claim.claim_number|default:claim.id }}
+            </div>
+            <div class="field-row">
+                <span class="field-label">Status:</span>
+                <span class="status-pill">{{ claim.get_status_display }}</span>
+            </div>
+            <div class="field-row">
+                <span class="field-label">Validation Status:</span>
+                {{ claim.validation_status|default:"-" }}
+            </div>
+            <div class="field-row">
+                <span class="field-label">Total Charge:</span>
+                ${{ claim.total_charge_amount }}
+            </div>
+            <div class="field-row">
+                <span class="field-label">Service Start:</span>
+                {{ claim.service_start_date|default:"-" }}
+            </div>
+            <div class="field-row">
+                <span class="field-label">Service End:</span>
+                {{ claim.service_end_date|default:"-" }}
+            </div>
+        </div>
+
+        {% if claim.validation_message %}
+            <p class="muted">{{ claim.validation_message }}</p>
+        {% endif %}
+    </div>
+
+    <div class="detail-section">
+        <h3>Patient Information</h3>
+        <div class="detail-grid">
+            <div class="field-row"><span class="field-label">Name:</span>{{ claim.patient }}</div>
+            <div class="field-row"><span class="field-label">Date of Birth:</span>{{ claim.patient.date_of_birth|default:"-" }}</div>
+            <div class="field-row"><span class="field-label">Sex:</span>{{ claim.patient.sex|default:"-" }}</div>
+            <div class="field-row"><span class="field-label">Phone:</span>{{ claim.patient.phone_number|default:"-" }}</div>
+            <div class="field-row"><span class="field-label">City:</span>{{ claim.patient.city|default:"-" }}</div>
+            <div class="field-row"><span class="field-label">State:</span>{{ claim.patient.state|default:"-" }}</div>
+            <div class="field-row"><span class="field-label">ZIP:</span>{{ claim.patient.zip_code|default:"-" }}</div>
+        </div>
+    </div>
+
+    <div class="detail-section">
+        <h3>Insured / Subscriber Information</h3>
+        {% if claim.insured_party %}
+            <div class="detail-grid">
+                <div class="field-row"><span class="field-label">Name:</span>{{ claim.insured_party }}</div>
+                <div class="field-row"><span class="field-label">Relationship:</span>{{ claim.insured_party.relationship_to_patient|default:"-" }}</div>
+                <div class="field-row"><span class="field-label">Insured ID:</span>{{ claim.insured_party.insured_id_number|default:"-" }}</div>
+                <div class="field-row"><span class="field-label">Group Number:</span>{{ claim.insured_party.group_number|default:"-" }}</div>
+            </div>
+        {% else %}
+            <p class="muted">No insured party recorded.</p>
+        {% endif %}
+    </div>
+
+    <div class="detail-section">
+        <h3>Payer Information</h3>
+        <div class="detail-grid">
+            <div class="field-row"><span class="field-label">Payer:</span>{{ claim.payer.payer_name }}</div>
+            <div class="field-row"><span class="field-label">Type:</span>{{ claim.payer.get_payer_type_display }}</div>
+            <div class="field-row"><span class="field-label">Payer Identifier:</span>{{ claim.payer.payer_identifier|default:"-" }}</div>
+            <div class="field-row"><span class="field-label">MAC:</span>{{ claim.payer.medicare_administrative_contractor|default:"-" }}</div>
+        </div>
+    </div>
+
+    <div class="detail-section">
+        <h3>Providers</h3>
+        {% if claim.claim_providers.all %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Role</th>
+                        <th>Provider</th>
+                        <th>NPI</th>
+                        <th>Taxonomy</th>
+                        <th>Location</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for claim_provider in claim.claim_providers.all %}
+                        <tr>
+                            <td>{{ claim_provider.get_provider_role_display }}</td>
+                            <td>{{ claim_provider.provider }}</td>
+                            <td>{{ claim_provider.provider.npi|default:"-" }}</td>
+                            <td>{{ claim_provider.provider.taxonomy_code|default:"-" }}</td>
+                            <td>
+                                {{ claim_provider.provider.city|default:"-" }}
+                                {{ claim_provider.provider.state|default:"" }}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="muted">No providers recorded.</p>
+        {% endif %}
+    </div>
+
+    <div class="detail-section">
+        <h3>Diagnosis Codes</h3>
+        {% if claim.diagnoses.all %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Order</th>
+                        <th>Diagnosis Code</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for diagnosis in claim.diagnoses.all %}
+                        <tr>
+                            <td>{{ diagnosis.diagnosis_order }}</td>
+                            <td>{{ diagnosis.diagnosis_code }}</td>
+                            <td>{{ diagnosis.description|default:"-" }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="muted">No diagnosis codes recorded.</p>
+        {% endif %}
+    </div>
+
+    <div class="detail-section">
+        <h3>Service Lines</h3>
+        {% if claim.service_lines.all %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>From</th>
+                        <th>To</th>
+                        <th>POS</th>
+                        <th>Procedure</th>
+                        <th>Modifiers</th>
+                        <th>Diagnosis Pointers</th>
+                        <th>Charge</th>
+                        <th>Units</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for line in claim.service_lines.all %}
+                        <tr>
+                            <td>{{ line.service_from_date|default:"-" }}</td>
+                            <td>{{ line.service_to_date|default:"-" }}</td>
+                            <td>{{ line.place_of_service|default:"-" }}</td>
+                            <td>{{ line.procedure_code }}</td>
+                            <td>
+                                {{ line.modifier_1 }}
+                                {{ line.modifier_2 }}
+                                {{ line.modifier_3 }}
+                                {{ line.modifier_4 }}
+                            </td>
+                            <td>
+                                {{ line.diagnosis_pointer_1|default:"" }}
+                                {{ line.diagnosis_pointer_2|default:"" }}
+                                {{ line.diagnosis_pointer_3|default:"" }}
+                                {{ line.diagnosis_pointer_4|default:"" }}
+                            </td>
+                            <td>${{ line.charge_amount }}</td>
+                            <td>{{ line.units }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="muted">No service lines recorded.</p>
+        {% endif %}
+    </div>
+
+    <div class="detail-section">
+        <h3>Audit Events</h3>
+        {% if claim.audit_events.all %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Event Type</th>
+                        <th>Description</th>
+                        <th>Changed By</th>
+                        <th>Created</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for event in claim.audit_events.all %}
+                        <tr>
+                            <td>{{ event.event_type }}</td>
+                            <td>{{ event.event_description|default:"-" }}</td>
+                            <td>{{ event.changed_by|default:"-" }}</td>
+                            <td>{{ event.created_at|date:"Y-m-d H:i" }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="muted">No audit events recorded.</p>
+        {% endif %}
+    </div>
+
+    <div class="actions">
+        <a href="{% url 'claims:capture_claim' %}" class="button">Capture Another Claim</a>
+        <a href="{% url 'claims:dashboard' %}" class="muted">Back to Dashboard</a>
+    </div>
+</div>
+{% endblock %}

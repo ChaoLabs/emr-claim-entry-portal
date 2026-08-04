@@ -47,10 +47,6 @@ class InsuredParty(TimeStampedModel):
     date_of_birth = models.DateField(null=True, blank=True)
     sex = models.CharField(max_length=20, blank=True)
 
-    relationship_to_patient = models.CharField(max_length=50, blank=True)
-    insured_id_number = models.CharField(max_length=100, blank=True)
-    group_number = models.CharField(max_length=100, blank=True)
-
     address_line_1 = models.CharField(max_length=255, blank=True)
     address_line_2 = models.CharField(max_length=255, blank=True)
     city = models.CharField(max_length=100, blank=True)
@@ -96,6 +92,65 @@ class Payer(TimeStampedModel):
 
     def __str__(self):
         return self.payer_name
+
+
+class InsurancePolicy(TimeStampedModel):
+    POLICY_TYPE_MEDICARE = "medicare"
+    POLICY_TYPE_MEDICAID = "medicaid"
+    POLICY_TYPE_COMMERCIAL = "commercial"
+    POLICY_TYPE_TRICARE = "tricare"
+    POLICY_TYPE_OTHER = "other"
+
+    POLICY_TYPE_CHOICES = [
+        (POLICY_TYPE_MEDICARE, "Medicare"),
+        (POLICY_TYPE_MEDICAID, "Medicaid"),
+        (POLICY_TYPE_COMMERCIAL, "Commercial"),
+        (POLICY_TYPE_TRICARE, "TRICARE"),
+        (POLICY_TYPE_OTHER, "Other"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    insured_party = models.ForeignKey(
+        InsuredParty,
+        on_delete=models.PROTECT,
+        related_name="insurance_policies",
+    )
+    payer = models.ForeignKey(
+        Payer,
+        on_delete=models.PROTECT,
+        related_name="insurance_policies",
+    )
+
+    member_id = models.CharField(max_length=100, blank=True)
+    group_number = models.CharField(max_length=100, blank=True)
+    plan_name = models.CharField(max_length=255, blank=True)
+    policy_type = models.CharField(max_length=50, choices=POLICY_TYPE_CHOICES, default=POLICY_TYPE_MEDICARE)
+
+    effective_start_date = models.DateField(null=True, blank=True)
+    effective_end_date = models.DateField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name_plural = "insurance policies"
+        ordering = ["insured_party", "payer", "member_id"]
+        indexes = [
+            models.Index(fields=["insured_party"]),
+            models.Index(fields=["member_id"]),
+            models.Index(fields=["policy_type"]),
+            models.Index(fields=["is_active"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["insured_party", "payer", "member_id", "group_number"],
+                condition=(~models.Q(member_id="") | ~models.Q(group_number="")),
+                name="unique_policy_when_member_or_group_present",
+            ),
+        ]
+
+    def __str__(self):
+        policy_label = self.member_id or self.group_number or "policy"
+        return f"{self.insured_party} - {self.payer.payer_name} - {policy_label}"
 
 
 class Provider(TimeStampedModel):
@@ -156,15 +211,6 @@ class Claim(TimeStampedModel):
 
     claim_number = models.CharField(max_length=100, unique=True, blank=True, null=True)
     patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="claims")
-    insured_party = models.ForeignKey(
-        InsuredParty,
-        on_delete=models.SET_NULL,
-        related_name="claims",
-        null=True,
-        blank=True,
-    )
-    payer = models.ForeignKey(Payer, on_delete=models.PROTECT, related_name="claims")
-
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default=STATUS_DRAFT)
     validation_status = models.CharField(max_length=50, blank=True)
     validation_message = models.TextField(blank=True)
@@ -180,12 +226,66 @@ class Claim(TimeStampedModel):
         indexes = [
             models.Index(fields=["status"]),
             models.Index(fields=["patient"]),
-            models.Index(fields=["payer"]),
             models.Index(fields=["service_start_date", "service_end_date"]),
         ]
 
     def __str__(self):
         return self.claim_number or f"Claim {self.id}"
+
+
+class ClaimCoverage(TimeStampedModel):
+    PAYER_SEQUENCE_PRIMARY = "primary"
+    PAYER_SEQUENCE_SECONDARY = "secondary"
+    PAYER_SEQUENCE_TERTIARY = "tertiary"
+    PAYER_SEQUENCE_OTHER = "other"
+
+    PAYER_SEQUENCE_CHOICES = [
+        (PAYER_SEQUENCE_PRIMARY, "Primary"),
+        (PAYER_SEQUENCE_SECONDARY, "Secondary"),
+        (PAYER_SEQUENCE_TERTIARY, "Tertiary"),
+        (PAYER_SEQUENCE_OTHER, "Other"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    claim = models.ForeignKey(Claim, on_delete=models.CASCADE, related_name="coverages")
+    insurance_policy = models.ForeignKey(
+        InsurancePolicy,
+        on_delete=models.PROTECT,
+        related_name="claim_coverages",
+    )
+
+    payer_sequence = models.CharField(
+        max_length=50,
+        choices=PAYER_SEQUENCE_CHOICES,
+        default=PAYER_SEQUENCE_PRIMARY,
+    )
+    relationship_to_patient = models.CharField(max_length=50, blank=True)
+    assignment_of_benefits = models.BooleanField(default=True)
+    release_of_information = models.BooleanField(default=True)
+    prior_authorization_number = models.CharField(max_length=100, blank=True)
+    other_payer_paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    class Meta:
+        ordering = ["claim", "payer_sequence"]
+        indexes = [
+            models.Index(fields=["claim"]),
+            models.Index(fields=["insurance_policy"]),
+            models.Index(fields=["payer_sequence"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["claim", "payer_sequence"],
+                name="unique_claim_payer_sequence",
+            ),
+            models.UniqueConstraint(
+                fields=["claim", "insurance_policy"],
+                name="unique_claim_insurance_policy",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.claim} - {self.payer_sequence} - {self.insurance_policy}"
 
 
 class ClaimProvider(TimeStampedModel):

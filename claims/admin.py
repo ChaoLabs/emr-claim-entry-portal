@@ -3,14 +3,21 @@ from django.contrib import admin
 from .models import (
     Claim,
     ClaimAuditEvent,
+    ClaimCoverage,
     ClaimDiagnosis,
     ClaimProvider,
+    InsurancePolicy,
     InsuredParty,
     Patient,
     Payer,
     Provider,
     ServiceLine,
 )
+
+
+class ClaimCoverageInline(admin.TabularInline):
+    model = ClaimCoverage
+    extra = 0
 
 
 class ClaimProviderInline(admin.TabularInline):
@@ -39,27 +46,40 @@ class ClaimAdmin(admin.ModelAdmin):
     list_display = (
         "claim_number",
         "patient",
-        "payer",
+        "primary_payer",
         "status",
-        "total_charge_amount",
+        "validation_status",
         "service_start_date",
-        "service_end_date",
         "created_at",
     )
-    list_filter = ("status", "payer", "service_start_date", "created_at")
+    list_filter = ("status", "validation_status", "service_start_date", "created_at")
     search_fields = (
         "claim_number",
         "patient__first_name",
         "patient__last_name",
-        "payer__payer_name",
+        "coverages__insurance_policy__payer__payer_name",
+        "coverages__insurance_policy__member_id",
+        "coverages__insurance_policy__group_number",
     )
-    date_hierarchy = "created_at"
+    ordering = ("-created_at",)
     inlines = [
+        ClaimCoverageInline,
         ClaimProviderInline,
         ClaimDiagnosisInline,
         ServiceLineInline,
         ClaimAuditEventInline,
     ]
+
+    @admin.display(description="Primary Payer")
+    def primary_payer(self, obj):
+        coverage = (
+            obj.coverages.select_related("insurance_policy__payer")
+            .filter(payer_sequence=ClaimCoverage.PAYER_SEQUENCE_PRIMARY)
+            .first()
+        )
+        if not coverage:
+            return "-"
+        return coverage.insurance_policy.payer.payer_name
 
 
 @admin.register(Patient)
@@ -72,15 +92,9 @@ class PatientAdmin(admin.ModelAdmin):
 
 @admin.register(InsuredParty)
 class InsuredPartyAdmin(admin.ModelAdmin):
-    list_display = (
-        "last_name",
-        "first_name",
-        "relationship_to_patient",
-        "insured_id_number",
-        "group_number",
-    )
-    search_fields = ("first_name", "last_name", "insured_id_number", "group_number")
-    list_filter = ("relationship_to_patient", "state")
+    list_display = ("last_name", "first_name", "date_of_birth", "sex", "city", "state")
+    search_fields = ("first_name", "last_name", "city", "state", "zip_code")
+    list_filter = ("sex", "state")
     ordering = ("last_name", "first_name")
 
 
@@ -92,54 +106,76 @@ class PayerAdmin(admin.ModelAdmin):
     ordering = ("payer_name",)
 
 
+@admin.register(InsurancePolicy)
+class InsurancePolicyAdmin(admin.ModelAdmin):
+    list_display = (
+        "insured_party",
+        "payer",
+        "member_id",
+        "group_number",
+        "plan_name",
+        "policy_type",
+        "is_active",
+    )
+    search_fields = (
+        "insured_party__first_name",
+        "insured_party__last_name",
+        "payer__payer_name",
+        "member_id",
+        "group_number",
+        "plan_name",
+    )
+    list_filter = ("policy_type", "is_active", "payer")
+    ordering = ("insured_party", "payer", "member_id")
+
+
+@admin.register(ClaimCoverage)
+class ClaimCoverageAdmin(admin.ModelAdmin):
+    list_display = (
+        "claim",
+        "payer_sequence",
+        "insurance_policy",
+        "relationship_to_patient",
+        "assignment_of_benefits",
+        "release_of_information",
+    )
+    search_fields = (
+        "claim__claim_number",
+        "insurance_policy__payer__payer_name",
+        "insurance_policy__member_id",
+        "insurance_policy__group_number",
+    )
+    list_filter = ("payer_sequence", "assignment_of_benefits", "release_of_information")
+    ordering = ("claim", "payer_sequence")
+
+
 @admin.register(Provider)
 class ProviderAdmin(admin.ModelAdmin):
-    list_display = ("display_name", "npi", "taxonomy_code", "city", "state")
-    search_fields = (
-        "organization_name",
-        "first_name",
-        "last_name",
-        "npi",
-        "taxonomy_code",
-        "city",
-        "state",
-    )
-    list_filter = ("state", "taxonomy_code")
+    list_display = ("organization_name", "last_name", "first_name", "npi", "taxonomy_code", "city", "state")
+    search_fields = ("organization_name", "first_name", "last_name", "npi", "taxonomy_code")
+    list_filter = ("state",)
     ordering = ("organization_name", "last_name", "first_name")
-
-    @admin.display(description="Provider")
-    def display_name(self, obj):
-        return str(obj)
 
 
 @admin.register(ClaimProvider)
 class ClaimProviderAdmin(admin.ModelAdmin):
     list_display = ("claim", "provider_role", "provider")
-    list_filter = ("provider_role",)
     search_fields = ("claim__claim_number", "provider__organization_name", "provider__npi")
+    list_filter = ("provider_role",)
 
 
 @admin.register(ClaimDiagnosis)
 class ClaimDiagnosisAdmin(admin.ModelAdmin):
     list_display = ("claim", "diagnosis_order", "diagnosis_code", "description")
-    list_filter = ("diagnosis_code",)
     search_fields = ("claim__claim_number", "diagnosis_code", "description")
     ordering = ("claim", "diagnosis_order")
 
 
 @admin.register(ServiceLine)
 class ServiceLineAdmin(admin.ModelAdmin):
-    list_display = (
-        "claim",
-        "procedure_code",
-        "service_from_date",
-        "service_to_date",
-        "place_of_service",
-        "charge_amount",
-        "units",
-    )
-    list_filter = ("procedure_code", "place_of_service", "service_from_date")
-    search_fields = ("claim__claim_number", "procedure_code", "place_of_service")
+    list_display = ("claim", "service_from_date", "service_to_date", "procedure_code", "charge_amount", "units")
+    search_fields = ("claim__claim_number", "procedure_code")
+    ordering = ("claim", "service_from_date")
 
 
 @admin.register(ClaimAuditEvent)
@@ -148,3 +184,4 @@ class ClaimAuditEventAdmin(admin.ModelAdmin):
     list_filter = ("event_type", "created_at")
     search_fields = ("claim__claim_number", "event_type", "event_description", "changed_by")
     readonly_fields = ("created_at",)
+    ordering = ("-created_at",)

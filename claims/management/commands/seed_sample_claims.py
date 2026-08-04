@@ -6,8 +6,10 @@ from django.db import transaction
 from claims.models import (
     Claim,
     ClaimAuditEvent,
+    ClaimCoverage,
     ClaimDiagnosis,
     ClaimProvider,
+    InsurancePolicy,
     InsuredParty,
     Patient,
     Payer,
@@ -42,9 +44,6 @@ class Command(BaseCommand):
             last_name="Morgan",
             date_of_birth="1985-04-12",
             sex="unknown",
-            relationship_to_patient="self",
-            insured_id_number="DEMO-MBI-0001",
-            group_number="DEMO-GROUP",
             address_line_1="100 Demo Patient Ave",
             city="Raleigh",
             state="NC",
@@ -79,17 +78,34 @@ class Command(BaseCommand):
             state="NC",
         )
 
+        insurance_policy = InsurancePolicy.objects.create(
+            insured_party=insured,
+            payer=payer,
+            member_id="DEMO-MBI-0001",
+            group_number="DEMO-GROUP",
+            plan_name="Demo Medicare Professional Coverage",
+            policy_type=InsurancePolicy.POLICY_TYPE_MEDICARE,
+            is_active=True,
+        )
+
         claim = Claim.objects.create(
             claim_number="CLM-DEMO-001",
             patient=patient,
-            insured_party=insured,
-            payer=payer,
             status=Claim.STATUS_READY_FOR_REVIEW,
             validation_status="capture_complete",
             validation_message="Fictional sample claim created for development review.",
             service_start_date="2026-07-26",
             service_end_date="2026-07-26",
             total_charge_amount=Decimal("125.00"),
+        )
+
+        ClaimCoverage.objects.create(
+            claim=claim,
+            insurance_policy=insurance_policy,
+            payer_sequence=ClaimCoverage.PAYER_SEQUENCE_PRIMARY,
+            relationship_to_patient="self",
+            assignment_of_benefits=True,
+            release_of_information=True,
         )
 
         ClaimProvider.objects.create(

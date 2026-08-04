@@ -57,9 +57,37 @@ class CMS1500CaptureForm(forms.Form):
             ("unknown", "Unknown"),
         ],
     )
+    # Coverage / policy information
     relationship_to_patient = forms.CharField(label="Relationship to Patient", max_length=50, required=False)
-    insured_id_number = forms.CharField(label="Insured ID Number", max_length=100, required=False)
+    insured_id_number = forms.CharField(label="Member / Insured ID Number", max_length=100, required=False)
     group_number = forms.CharField(label="Group Number", max_length=100, required=False)
+    plan_name = forms.CharField(label="Plan Name", max_length=255, required=False)
+    policy_type = forms.ChoiceField(
+        label="Policy Type",
+        choices=[
+            ("medicare", "Medicare"),
+            ("medicaid", "Medicaid"),
+            ("commercial", "Commercial"),
+            ("tricare", "TRICARE"),
+            ("other", "Other"),
+        ],
+        initial="medicare",
+        required=False,
+    )
+    payer_sequence = forms.ChoiceField(
+        label="Payer Sequence",
+        choices=[
+            ("primary", "Primary"),
+            ("secondary", "Secondary"),
+            ("tertiary", "Tertiary"),
+            ("other", "Other"),
+        ],
+        initial="primary",
+        required=False,
+    )
+    assignment_of_benefits = forms.BooleanField(label="Assignment of Benefits", required=False, initial=True)
+    release_of_information = forms.BooleanField(label="Release of Information", required=False, initial=True)
+    prior_authorization_number = forms.CharField(label="Prior Authorization Number", max_length=100, required=False)
 
     # Payer information
     payer_name = forms.CharField(label="Payer Name", max_length=255, initial="Medicare")

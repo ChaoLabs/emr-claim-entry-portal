@@ -1,21 +1,23 @@
-# CMS-1500 Capture ERD
+# CMS-1500 Claim Capture ERD
 
-This document provides the initial Mermaid ERD for the CMS-1500 claim capture database design.
-
-The current schema direction uses UUID primary keys for internal database identity. Business identifiers such as NPI numbers, payer identifiers, ICD-10 codes, CPT codes, and HCPCS codes are stored as data fields rather than primary keys.
-
-## Entity Relationship Diagram
+The following ERD shows the current normalized database design for CMS-1500 professional claim capture.
 
 ```mermaid
 erDiagram
-    PATIENTS ||--o{ CLAIMS : has
-    INSURED_PARTIES ||--o{ CLAIMS : covers
-    PAYERS ||--o{ CLAIMS : receives
-    CLAIMS ||--o{ CLAIM_PROVIDERS : includes
-    PROVIDERS ||--o{ CLAIM_PROVIDERS : participates
-    CLAIMS ||--o{ CLAIM_DIAGNOSES : contains
-    CLAIMS ||--o{ SERVICE_LINES : contains
-    CLAIMS ||--o{ CLAIM_AUDIT_EVENTS : tracks
+    PATIENTS ||--o{ CLAIMS : "receives services for"
+
+    INSURED_PARTIES ||--o{ INSURANCE_POLICIES : "holds"
+    PAYERS ||--o{ INSURANCE_POLICIES : "issues"
+
+    CLAIMS ||--o{ CLAIM_COVERAGES : "uses"
+    INSURANCE_POLICIES ||--o{ CLAIM_COVERAGES : "applies to"
+
+    CLAIMS ||--o{ CLAIM_PROVIDERS : "has"
+    PROVIDERS ||--o{ CLAIM_PROVIDERS : "serves as"
+
+    CLAIMS ||--o{ CLAIM_DIAGNOSES : "has"
+    CLAIMS ||--o{ SERVICE_LINES : "has"
+    CLAIMS ||--o{ CLAIM_AUDIT_EVENTS : "tracks"
 
     PATIENTS {
         uuid id PK
@@ -30,8 +32,6 @@ erDiagram
         string state
         string zip_code
         string phone_number
-        datetime created_at
-        datetime updated_at
     }
 
     INSURED_PARTIES {
@@ -41,16 +41,11 @@ erDiagram
         string last_name
         date date_of_birth
         string sex
-        string relationship_to_patient
-        string insured_id_number
-        string group_number
         string address_line_1
         string address_line_2
         string city
         string state
         string zip_code
-        datetime created_at
-        datetime updated_at
     }
 
     PAYERS {
@@ -59,8 +54,44 @@ erDiagram
         string payer_type
         string payer_identifier
         string medicare_administrative_contractor
-        datetime created_at
-        datetime updated_at
+    }
+
+    INSURANCE_POLICIES {
+        uuid id PK
+        uuid insured_party_id FK
+        uuid payer_id FK
+        string member_id
+        string group_number
+        string plan_name
+        string policy_type
+        date effective_start_date
+        date effective_end_date
+        boolean is_active
+    }
+
+    CLAIMS {
+        uuid id PK
+        string claim_number
+        uuid patient_id FK
+        string status
+        string validation_status
+        text validation_message
+        date service_start_date
+        date service_end_date
+        decimal total_charge_amount
+        datetime submitted_at
+    }
+
+    CLAIM_COVERAGES {
+        uuid id PK
+        uuid claim_id FK
+        uuid insurance_policy_id FK
+        string payer_sequence
+        string relationship_to_patient
+        boolean assignment_of_benefits
+        boolean release_of_information
+        string prior_authorization_number
+        decimal other_payer_paid_amount
     }
 
     PROVIDERS {
@@ -77,25 +108,6 @@ erDiagram
         string state
         string zip_code
         string phone_number
-        datetime created_at
-        datetime updated_at
-    }
-
-    CLAIMS {
-        uuid id PK
-        string claim_number
-        uuid patient_id FK
-        uuid insured_party_id FK
-        uuid payer_id FK
-        string status
-        string validation_status
-        text validation_message
-        date service_start_date
-        date service_end_date
-        decimal total_charge_amount
-        datetime submitted_at
-        datetime created_at
-        datetime updated_at
     }
 
     CLAIM_PROVIDERS {
@@ -103,18 +115,14 @@ erDiagram
         uuid claim_id FK
         uuid provider_id FK
         string provider_role
-        datetime created_at
-        datetime updated_at
     }
 
     CLAIM_DIAGNOSES {
         uuid id PK
         uuid claim_id FK
         string diagnosis_code
-        integer diagnosis_order
+        int diagnosis_order
         string description
-        datetime created_at
-        datetime updated_at
     }
 
     SERVICE_LINES {
@@ -128,14 +136,12 @@ erDiagram
         string modifier_2
         string modifier_3
         string modifier_4
-        integer diagnosis_pointer_1
-        integer diagnosis_pointer_2
-        integer diagnosis_pointer_3
-        integer diagnosis_pointer_4
+        int diagnosis_pointer_1
+        int diagnosis_pointer_2
+        int diagnosis_pointer_3
+        int diagnosis_pointer_4
         decimal charge_amount
-        integer units
-        datetime created_at
-        datetime updated_at
+        int units
     }
 
     CLAIM_AUDIT_EVENTS {
@@ -148,12 +154,13 @@ erDiagram
     }
 ```
 
-## Design Notes
+## Key Relationship Update
 
-- A claim belongs to one patient, one insured party, and one payer.
-- A claim can include multiple providers through claim_providers.
-- A claim can include multiple ICD-10 diagnosis codes.
-- A claim can include multiple CMS-1500 service lines.
-- Service lines include diagnosis pointers so procedures can be linked back to diagnosis entries.
-- Claim audit events support traceability during claim creation, editing, validation, and future submission workflows.
-- This ERD is an initial design and may be refined after mentor feedback or implementation testing.
+The insurance relationship is modeled through two tables:
+
+```text
+InsuredParty -> InsurancePolicy <- Payer
+Claim -> ClaimCoverage -> InsurancePolicy
+```
+
+This avoids forcing a claim to have only one direct payer and allows future support for primary, secondary, and tertiary coverage.

@@ -53,7 +53,15 @@
                             </a>
                         </td>
                         <td style="padding: 10px;">{{ claim.patient }}</td>
-                        <td style="padding: 10px;">{{ claim.payer }}</td>
+                        <td style="padding: 10px;">
+                                {% for coverage in claim.coverages.all %}
+                                    {% if coverage.payer_sequence == "primary" %}
+                                        {{ coverage.insurance_policy.payer }}
+                                    {% endif %}
+                                {% empty %}
+                                    -
+                                {% endfor %}
+                            </td>
                         <td style="padding: 10px;">{{ claim.get_status_display }}</td>
                         <td style="padding: 10px;">${{ claim.total_charge_amount }}</td>
                         <td style="padding: 10px;">{{ claim.created_at|date:"Y-m-d H:i" }}</td>

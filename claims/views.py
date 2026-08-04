@@ -9,8 +9,10 @@ from .forms import CMS1500CaptureForm
 from .models import (
     Claim,
     ClaimAuditEvent,
+    ClaimCoverage,
     ClaimDiagnosis,
     ClaimProvider,
+    InsurancePolicy,
     InsuredParty,
     Patient,
     Payer,
@@ -20,7 +22,11 @@ from .models import (
 
 
 def dashboard(request):
-    recent_claims = Claim.objects.select_related("patient", "payer").order_by("-created_at")[:10]
+    recent_claims = (
+        Claim.objects.select_related("patient")
+        .prefetch_related("coverages__insurance_policy__payer")
+        .order_by("-created_at")[:10]
+    )
 
     context = {
         "recent_claims": recent_claims,
@@ -33,12 +39,18 @@ def dashboard(request):
 
 def claim_detail(request, claim_id):
     claim = get_object_or_404(
-        Claim.objects.select_related("patient", "insured_party", "payer")
-        .prefetch_related("claim_providers__provider", "diagnoses", "service_lines", "audit_events"),
+        Claim.objects.select_related("patient")
+        .prefetch_related(
+            "coverages__insurance_policy__insured_party",
+            "coverages__insurance_policy__payer",
+            "claim_providers__provider",
+            "diagnoses",
+            "service_lines",
+            "audit_events",
+        ),
         id=claim_id,
     )
     return render(request, "claims/claim_detail.html", {"claim": claim})
-
 
 def capture_claim(request):
     if request.method == "POST":
@@ -76,9 +88,6 @@ def _save_capture_form(data):
             last_name=patient.last_name,
             date_of_birth=patient.date_of_birth,
             sex=patient.sex,
-            relationship_to_patient="self",
-            insured_id_number=data.get("insured_id_number", ""),
-            group_number=data.get("group_number", ""),
             address_line_1=patient.address_line_1,
             address_line_2=patient.address_line_2,
             city=patient.city,
@@ -92,9 +101,6 @@ def _save_capture_form(data):
             last_name=data.get("insured_last_name", ""),
             date_of_birth=data.get("insured_date_of_birth"),
             sex=data.get("insured_sex", ""),
-            relationship_to_patient=data.get("relationship_to_patient", ""),
-            insured_id_number=data.get("insured_id_number", ""),
-            group_number=data.get("group_number", ""),
         )
 
     payer = Payer.objects.create(
@@ -117,17 +123,34 @@ def _save_capture_form(data):
 
     claim_number = data.get("claim_number") or _generate_claim_number()
 
+    insurance_policy = InsurancePolicy.objects.create(
+        insured_party=insured_party,
+        payer=payer,
+        member_id=data.get("insured_id_number", ""),
+        group_number=data.get("group_number", ""),
+        plan_name=data.get("plan_name", ""),
+        policy_type=data.get("policy_type") or data.get("payer_type") or InsurancePolicy.POLICY_TYPE_MEDICARE,
+    )
+
     claim = Claim.objects.create(
         claim_number=claim_number,
         patient=patient,
-        insured_party=insured_party,
-        payer=payer,
         status=Claim.STATUS_READY_FOR_REVIEW,
         validation_status="capture_complete",
         validation_message="Initial CMS-1500 capture completed through the web form.",
         service_start_date=data.get("service_start_date"),
         service_end_date=data.get("service_end_date"),
         total_charge_amount=data.get("charge_amount") or 0,
+    )
+
+    ClaimCoverage.objects.create(
+        claim=claim,
+        insurance_policy=insurance_policy,
+        payer_sequence=data.get("payer_sequence") or ClaimCoverage.PAYER_SEQUENCE_PRIMARY,
+        relationship_to_patient=data.get("relationship_to_patient") or ("self" if data.get("insured_same_as_patient") else ""),
+        assignment_of_benefits=data.get("assignment_of_benefits", False),
+        release_of_information=data.get("release_of_information", False),
+        prior_authorization_number=data.get("prior_authorization_number", ""),
     )
 
     ClaimProvider.objects.create(

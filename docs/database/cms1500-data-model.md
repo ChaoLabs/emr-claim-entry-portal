@@ -1,77 +1,220 @@
-# CMS-1500 Capture Data Model
+# CMS-1500 Claim Data Model
 
-This document defines the initial database design direction for capturing CMS-1500 professional claim information in the EMRTS Electronic Claim Entry & Submission Portal.
+This document describes the current normalized database design for the CMS-1500 claim capture portion of the Electronic Claim Entry Portal.
 
-The current assignment focuses on capturing CMS-1500 information through a web interface and storing the structured data in PostgreSQL. The design should also remain compatible with future ANSI X12 837P generation and Medicare/MAC transmission.
+The design intentionally separates patient identity, insured/subscriber identity, payer identity, insurance policy information, claim coverage, providers, diagnoses, service lines, and audit events.
 
-## Design Goals
+## Core Design Principle
 
-- Capture the major CMS-1500 information groups in a structured relational database.
-- Keep patient, insured, provider, diagnosis, and service-line data separate enough for validation and future mapping.
-- Preserve the entered claim information for review, correction, audit, and future resubmission workflows.
-- Prepare the schema for future ANSI X12 837P conversion without implementing the converter in this phase.
-- Avoid storing real PHI in development or sample data.
+The project originally used a simple structure where a claim directly referenced one insured party and one payer.
 
-## Core Data Groups
+After further review, the design was updated because real healthcare claim processing is more complex:
 
-| Data Group | Purpose |
-| --- | --- |
-| Claim | Main claim record, status, payer type, dates, totals, and workflow metadata. |
-| Patient | Patient demographic information captured from the CMS-1500 form. |
-| Insured / Subscriber | Insurance subscriber information, which may be the patient or another person. |
-| Provider | Billing, rendering, referring, or facility provider information. |
-| Diagnosis | ICD-10 diagnosis codes associated with the claim. |
-| Service Line | CPT/HCPCS service lines, modifiers, charges, units, and diagnosis pointers. |
-| Payer | Medicare or other payer information needed for claim routing. |
-| Audit Event | Record of claim creation, edits, validation, submission preparation, and status changes. |
+- One insured party can have multiple insurance policies.
+- One payer can cover many insured parties through different policies.
+- One claim can involve multiple coverage records, such as primary, secondary, or tertiary coverage.
+- Member ID and group number belong to a specific insurance policy, not directly to the insured person.
+- Relationship to patient belongs to the claim coverage context, not directly to the insured person.
 
-## Proposed Initial Tables
+The updated structure is:
 
-| Table | Description |
-| --- | --- |
-| claims | Main claim header table. Stores claim status, payer, patient relationship, dates, total charge amount, and workflow fields. |
-| patients | Stores patient demographic fields such as name, date of birth, sex, address, and contact information. |
-| insured_parties | Stores subscriber or insured information for the claim. |
-| payers | Stores payer information such as payer name, payer type, and payer identifier. |
-| providers | Stores provider records such as name, NPI, taxonomy code, address, and provider role information. |
-| claim_providers | Links a claim to one or more providers, such as billing provider, rendering provider, referring provider, or service facility. |
-| claim_diagnoses | Stores diagnosis codes for a claim, including ordering and ICD-10 code values. |
-| service_lines | Stores individual CMS-1500 service lines, including procedure code, modifiers, dates of service, charge amount, units, place of service, and diagnosis pointers. |
-| claim_audit_events | Stores audit history for claim creation, editing, validation, and future submission-related events. |
+```text
+InsuredParty -> InsurancePolicy <- Payer
+Claim -> ClaimCoverage -> InsurancePolicy
+```
 
-## Important Field Categories
+This supports real-world insurance relationships and better prepares the system for future ANSI X12 837P generation.
 
-| Category | Example Fields |
-| --- | --- |
-| Claim header | claim_number, status, payer_id, patient_id, insured_party_id, date_created, total_charge_amount |
-| Patient information | first_name, last_name, middle_name, date_of_birth, sex, address_line_1, city, state, zip_code, phone_number |
-| Insured information | relationship_to_patient, insured_id_number, group_number, first_name, last_name, date_of_birth, address |
-| Provider information | provider_role, organization_name, first_name, last_name, npi, taxonomy_code, tax_id, address |
-| Diagnosis information | diagnosis_code, diagnosis_order, description |
-| Service line information | service_from_date, service_to_date, place_of_service, procedure_code, modifier_1, modifier_2, modifier_3, modifier_4, diagnosis_pointer_1, diagnosis_pointer_2, charge_amount, units |
-| Workflow information | status, validation_status, validation_message, created_at, updated_at, submitted_at |
-| Audit information | event_type, event_description, changed_by, created_at |
+## Main Tables
 
-## Claim Status Direction
+| Table | Purpose |
+|---|---|
+| patients | Stores patient demographic information. |
+| insured_parties | Stores subscriber / insured person demographic information. |
+| payers | Stores payer or insurance company information. |
+| insurance_policies | Connects an insured party to a payer through a specific policy or coverage record. |
+| claims | Stores the main claim header, status, patient, dates, total charge, and workflow metadata. |
+| claim_coverages | Connects a claim to one or more insurance policies and stores payer sequence information. |
+| providers | Stores billing, rendering, referring, and facility provider information. |
+| claim_providers | Connects providers to a claim by role. |
+| claim_diagnoses | Stores diagnosis codes associated with a claim. |
+| service_lines | Stores professional service line information. |
+| claim_audit_events | Stores claim workflow and audit events. |
 
-| Status | Meaning |
-| --- | --- |
-| draft | Claim has been started but is not ready for validation or submission. |
-| ready_for_review | Claim capture is complete enough for internal review. |
-| validation_failed | Claim failed local validation and needs correction. |
-| ready_for_837p | Claim has passed the capture-stage checks and can later be mapped to ANSI X12 837P. |
-| submitted | Future status after transmission is implemented. |
-| accepted | Future status after payer acknowledgment is implemented. |
-| rejected | Future status after payer rejection is implemented. |
-| paid | Future status after remittance processing is implemented. |
-| denied | Future status after denial information is available. |
+## Table Details
 
-## Design Notes
+### patients
 
-- UUID primary keys should be used for internal database identity.
-- Real-world identifiers such as NPI numbers, payer identifiers, ICD-10 codes, CPT codes, and HCPCS codes should be stored as business data fields, not internal primary keys.
-- The current phase should focus on claim capture and database design rather than full EDI transaction generation.
-- The database should support multiple diagnosis codes and multiple service lines per claim.
-- Service lines should support diagnosis pointers because CMS-1500 and 837P workflows link procedures to diagnosis codes.
-- The schema should include audit fields because healthcare claim workflows require traceability.
-- Development sample data should use fictional patients and fictional claim examples only.
+Stores the person receiving the healthcare service.
+
+Important fields:
+
+- id
+- first_name
+- middle_name
+- last_name
+- date_of_birth
+- sex
+- address fields
+- phone_number
+
+### insured_parties
+
+Stores the subscriber or insured person. This may be the patient, a parent, spouse, guardian, or another covered person.
+
+Important fields:
+
+- id
+- first_name
+- middle_name
+- last_name
+- date_of_birth
+- sex
+- address fields
+
+Insurance-specific fields are intentionally not stored here.
+
+### payers
+
+Stores payer-level information.
+
+Important fields:
+
+- id
+- payer_name
+- payer_type
+- payer_identifier
+- medicare_administrative_contractor
+
+### insurance_policies
+
+Represents a real insurance relationship between an insured party and a payer.
+
+Important fields:
+
+- id
+- insured_party_id
+- payer_id
+- member_id
+- group_number
+- plan_name
+- policy_type
+- effective_start_date
+- effective_end_date
+- is_active
+
+This table resolves the many-to-many relationship between insured parties and payers.
+
+### claims
+
+Stores the main claim header.
+
+Important fields:
+
+- id
+- claim_number
+- patient_id
+- status
+- validation_status
+- validation_message
+- service_start_date
+- service_end_date
+- total_charge_amount
+- submitted_at
+
+The claim does not directly store payer_id or insured_party_id. Coverage information is represented through claim_coverages.
+
+### claim_coverages
+
+Connects a claim to an insurance policy.
+
+Important fields:
+
+- id
+- claim_id
+- insurance_policy_id
+- payer_sequence
+- relationship_to_patient
+- assignment_of_benefits
+- release_of_information
+- prior_authorization_number
+- other_payer_paid_amount
+
+This table supports primary, secondary, tertiary, and other payer sequences.
+
+### providers
+
+Stores provider information.
+
+Important fields:
+
+- id
+- organization_name
+- first_name
+- last_name
+- npi
+- taxonomy_code
+- tax_id
+- address fields
+- phone_number
+
+### claim_providers
+
+Connects providers to claims by role.
+
+Supported roles:
+
+- billing
+- rendering
+- referring
+- facility
+
+### claim_diagnoses
+
+Stores diagnosis codes for a claim.
+
+Important fields:
+
+- id
+- claim_id
+- diagnosis_code
+- diagnosis_order
+- description
+
+### service_lines
+
+Stores professional service line details.
+
+Important fields:
+
+- id
+- claim_id
+- service_from_date
+- service_to_date
+- place_of_service
+- procedure_code
+- modifiers
+- diagnosis pointers
+- charge_amount
+- units
+
+### claim_audit_events
+
+Stores workflow and audit information.
+
+Important fields:
+
+- id
+- claim_id
+- event_type
+- event_description
+- changed_by
+- created_at
+
+## Design Rationale
+
+This schema keeps identity, insurance, claim, and workflow data separated.
+
+The most important update is the introduction of insurance_policies and claim_coverages. These two tables allow the system to model realistic insurance scenarios, including multiple policies per insured party and multiple coverages per claim.
+
+This design is also more suitable for future ANSI X12 837P generation because payer sequence, subscriber information, member ID, group number, provider roles, diagnosis codes, and service lines are stored in normalized locations.

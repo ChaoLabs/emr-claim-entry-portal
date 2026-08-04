@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 
 from django.test import TestCase
@@ -6,8 +7,10 @@ from django.urls import reverse
 from .models import (
     Claim,
     ClaimAuditEvent,
+    ClaimCoverage,
     ClaimDiagnosis,
     ClaimProvider,
+    InsurancePolicy,
     InsuredParty,
     Patient,
     Payer,
@@ -21,7 +24,7 @@ class ClaimCaptureWorkflowTests(TestCase):
         self.patient = Patient.objects.create(
             first_name="Alex",
             last_name="Morgan",
-            date_of_birth="1985-04-12",
+            date_of_birth=date(1985, 4, 12),
             sex="unknown",
             city="Raleigh",
             state="NC",
@@ -30,13 +33,21 @@ class ClaimCaptureWorkflowTests(TestCase):
         self.insured = InsuredParty.objects.create(
             first_name="Alex",
             last_name="Morgan",
-            relationship_to_patient="self",
-            insured_id_number="DEMO-MBI-0001",
+            date_of_birth=date(1985, 4, 12),
+            sex="unknown",
         )
         self.payer = Payer.objects.create(
             payer_name="Medicare",
             payer_type=Payer.PAYER_TYPE_MEDICARE,
             payer_identifier="CMS-DEMO",
+        )
+        self.insurance_policy = InsurancePolicy.objects.create(
+            insured_party=self.insured,
+            payer=self.payer,
+            member_id="DEMO-MBI-0001",
+            group_number="DEMO-GROUP",
+            plan_name="Demo Medicare Professional Coverage",
+            policy_type=InsurancePolicy.POLICY_TYPE_MEDICARE,
         )
         self.provider = Provider.objects.create(
             organization_name="EMRTS Demo Clinic",
@@ -48,11 +59,17 @@ class ClaimCaptureWorkflowTests(TestCase):
         self.claim = Claim.objects.create(
             claim_number="CLM-TEST-001",
             patient=self.patient,
-            insured_party=self.insured,
-            payer=self.payer,
             status=Claim.STATUS_READY_FOR_REVIEW,
             validation_status="capture_complete",
             total_charge_amount=Decimal("125.00"),
+        )
+        ClaimCoverage.objects.create(
+            claim=self.claim,
+            insurance_policy=self.insurance_policy,
+            payer_sequence=ClaimCoverage.PAYER_SEQUENCE_PRIMARY,
+            relationship_to_patient="self",
+            assignment_of_benefits=True,
+            release_of_information=True,
         )
         ClaimProvider.objects.create(
             claim=self.claim,
@@ -87,6 +104,7 @@ class ClaimCaptureWorkflowTests(TestCase):
         self.assertContains(response, "Claim Entry Dashboard")
         self.assertContains(response, "CLM-TEST-001")
         self.assertContains(response, "Morgan, Alex")
+        self.assertContains(response, "Medicare")
 
     def test_claim_detail_loads_related_claim_data(self):
         response = self.client.get(reverse("claims:claim_detail", args=[self.claim.id]))
@@ -94,7 +112,10 @@ class ClaimCaptureWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Claim Detail")
         self.assertContains(response, "CLM-TEST-001")
+        self.assertContains(response, "Coverage / Policy Information")
         self.assertContains(response, "Medicare")
+        self.assertContains(response, "DEMO-MBI-0001")
+        self.assertContains(response, "Demo Medicare Professional Coverage")
         self.assertContains(response, "EMRTS Demo Clinic")
         self.assertContains(response, "M54.50")
         self.assertContains(response, "99213")
@@ -121,8 +142,14 @@ class ClaimCaptureWorkflowTests(TestCase):
                 "insured_date_of_birth": "",
                 "insured_sex": "",
                 "relationship_to_patient": "",
-                "insured_id_number": "",
-                "group_number": "",
+                "insured_id_number": "TEST-MBI-0002",
+                "group_number": "TEST-GROUP",
+                "plan_name": "Test Medicare Plan",
+                "policy_type": "medicare",
+                "payer_sequence": "primary",
+                "assignment_of_benefits": "on",
+                "release_of_information": "on",
+                "prior_authorization_number": "AUTH-123",
                 "payer_name": "Medicare",
                 "payer_type": "medicare",
                 "payer_identifier": "",
@@ -170,9 +197,21 @@ class ClaimCaptureWorkflowTests(TestCase):
 
         claim = Claim.objects.get(claim_number="CLM-TEST-POST-001")
         self.assertEqual(claim.patient.last_name, "Carter")
-        self.assertEqual(claim.payer.payer_name, "Medicare")
         self.assertEqual(claim.status, Claim.STATUS_READY_FOR_REVIEW)
         self.assertEqual(claim.total_charge_amount, Decimal("150.00"))
+
+        self.assertEqual(claim.coverages.count(), 1)
+        coverage = claim.coverages.select_related("insurance_policy__payer", "insurance_policy__insured_party").get()
+        self.assertEqual(coverage.payer_sequence, ClaimCoverage.PAYER_SEQUENCE_PRIMARY)
+        self.assertEqual(coverage.relationship_to_patient, "self")
+        self.assertTrue(coverage.assignment_of_benefits)
+        self.assertTrue(coverage.release_of_information)
+        self.assertEqual(coverage.prior_authorization_number, "AUTH-123")
+        self.assertEqual(coverage.insurance_policy.payer.payer_name, "Medicare")
+        self.assertEqual(coverage.insurance_policy.member_id, "TEST-MBI-0002")
+        self.assertEqual(coverage.insurance_policy.group_number, "TEST-GROUP")
+        self.assertEqual(coverage.insurance_policy.plan_name, "Test Medicare Plan")
+
         self.assertEqual(claim.diagnoses.count(), 1)
         self.assertEqual(claim.service_lines.count(), 1)
         self.assertEqual(claim.claim_providers.count(), 1)

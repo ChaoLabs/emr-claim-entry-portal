@@ -127,27 +127,41 @@
     </div>
 
     <div class="detail-section">
-        <h3>Insured / Subscriber Information</h3>
-        {% if claim.insured_party %}
-            <div class="detail-grid">
-                <div class="field-row"><span class="field-label">Name:</span>{{ claim.insured_party }}</div>
-                <div class="field-row"><span class="field-label">Relationship:</span>{{ claim.insured_party.relationship_to_patient|default:"-" }}</div>
-                <div class="field-row"><span class="field-label">Insured ID:</span>{{ claim.insured_party.insured_id_number|default:"-" }}</div>
-                <div class="field-row"><span class="field-label">Group Number:</span>{{ claim.insured_party.group_number|default:"-" }}</div>
-            </div>
+        <h3>Coverage / Policy Information</h3>
+        {% if claim.coverages.all %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Sequence</th>
+                        <th>Insured / Subscriber</th>
+                        <th>Relationship</th>
+                        <th>Payer</th>
+                        <th>Policy Type</th>
+                        <th>Member ID</th>
+                        <th>Group Number</th>
+                        <th>Plan Name</th>
+                        <th>Authorization</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for coverage in claim.coverages.all %}
+                        <tr>
+                            <td>{{ coverage.get_payer_sequence_display }}</td>
+                            <td>{{ coverage.insurance_policy.insured_party }}</td>
+                            <td>{{ coverage.relationship_to_patient|default:"-" }}</td>
+                            <td>{{ coverage.insurance_policy.payer.payer_name }}</td>
+                            <td>{{ coverage.insurance_policy.get_policy_type_display }}</td>
+                            <td>{{ coverage.insurance_policy.member_id|default:"-" }}</td>
+                            <td>{{ coverage.insurance_policy.group_number|default:"-" }}</td>
+                            <td>{{ coverage.insurance_policy.plan_name|default:"-" }}</td>
+                            <td>{{ coverage.prior_authorization_number|default:"-" }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         {% else %}
-            <p class="muted">No insured party recorded.</p>
+            <p class="muted">No coverage or payer information recorded.</p>
         {% endif %}
-    </div>
-
-    <div class="detail-section">
-        <h3>Payer Information</h3>
-        <div class="detail-grid">
-            <div class="field-row"><span class="field-label">Payer:</span>{{ claim.payer.payer_name }}</div>
-            <div class="field-row"><span class="field-label">Type:</span>{{ claim.payer.get_payer_type_display }}</div>
-            <div class="field-row"><span class="field-label">Payer Identifier:</span>{{ claim.payer.payer_identifier|default:"-" }}</div>
-            <div class="field-row"><span class="field-label">MAC:</span>{{ claim.payer.medicare_administrative_contractor|default:"-" }}</div>
-        </div>
     </div>
 
     <div class="detail-section">

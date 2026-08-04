@@ -110,9 +110,27 @@
                 <div class="form-field">{{ form.insured_middle_name.label_tag }}{{ form.insured_middle_name }}{{ form.insured_middle_name.errors }}</div>
                 <div class="form-field">{{ form.insured_date_of_birth.label_tag }}{{ form.insured_date_of_birth }}{{ form.insured_date_of_birth.errors }}</div>
                 <div class="form-field">{{ form.insured_sex.label_tag }}{{ form.insured_sex }}{{ form.insured_sex.errors }}</div>
-                <div class="form-field">{{ form.relationship_to_patient.label_tag }}{{ form.relationship_to_patient }}{{ form.relationship_to_patient.errors }}</div>
-                <div class="form-field">{{ form.insured_id_number.label_tag }}{{ form.insured_id_number }}{{ form.insured_id_number.errors }}</div>
-                <div class="form-field">{{ form.group_number.label_tag }}{{ form.group_number }}{{ form.group_number.errors }}</div>
+            </div>
+        </section>
+
+        <section class="form-section">
+            <h3>Coverage / Policy Information</h3>
+            <div class="form-grid">
+                <div class="form-field">{{ form.relationship_to_patient.label_tag }} {{ form.relationship_to_patient }} {{ form.relationship_to_patient.errors }}</div>
+                <div class="form-field">{{ form.insured_id_number.label_tag }} {{ form.insured_id_number }} {{ form.insured_id_number.errors }}</div>
+                <div class="form-field">{{ form.group_number.label_tag }} {{ form.group_number }} {{ form.group_number.errors }}</div>
+                <div class="form-field">{{ form.plan_name.label_tag }} {{ form.plan_name }} {{ form.plan_name.errors }}</div>
+                <div class="form-field">{{ form.policy_type.label_tag }} {{ form.policy_type }} {{ form.policy_type.errors }}</div>
+                <div class="form-field">{{ form.payer_sequence.label_tag }} {{ form.payer_sequence }} {{ form.payer_sequence.errors }}</div>
+                <div class="form-field">
+                    <label>{{ form.assignment_of_benefits }} Assignment of Benefits</label>
+                    {{ form.assignment_of_benefits.errors }}
+                </div>
+                <div class="form-field">
+                    <label>{{ form.release_of_information }} Release of Information</label>
+                    {{ form.release_of_information.errors }}
+                </div>
+                <div class="form-field full-width">{{ form.prior_authorization_number.label_tag }} {{ form.prior_authorization_number }} {{ form.prior_authorization_number.errors }}</div>
             </div>
         </section>
 

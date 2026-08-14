@@ -1,8 +1,10 @@
 from datetime import date
 from decimal import Decimal
 
+from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from .models import (
     Claim,
@@ -10,17 +12,78 @@ from .models import (
     ClaimCoverage,
     ClaimDiagnosis,
     ClaimProvider,
+    Icd10Code,
     InsurancePolicy,
     InsuredParty,
+    NpiReference,
     Patient,
     Payer,
+    ProcedureCode,
     Provider,
+    ReferenceDataUpdate,
     ServiceLine,
 )
 
 
 class ClaimCaptureWorkflowTests(TestCase):
     def setUp(self):
+        completed_at = timezone.now()
+        nppes_update = ReferenceDataUpdate.objects.create(
+            dataset_name=ReferenceDataUpdate.DATASET_NPPES,
+            source_name="NPPES development subset",
+            source_version="test-2026-08",
+            status=ReferenceDataUpdate.STATUS_COMPLETED,
+            records_loaded=1,
+            completed_at=completed_at,
+            triggered_by="test",
+        )
+        icd10_update = ReferenceDataUpdate.objects.create(
+            dataset_name=ReferenceDataUpdate.DATASET_ICD10,
+            source_name="ICD-10-CM development subset",
+            source_version="test-2026",
+            status=ReferenceDataUpdate.STATUS_COMPLETED,
+            records_loaded=2,
+            completed_at=completed_at,
+            triggered_by="test",
+        )
+        procedure_update = ReferenceDataUpdate.objects.create(
+            dataset_name=ReferenceDataUpdate.DATASET_PROCEDURE,
+            source_name="CPT / HCPCS development subset",
+            source_version="test-2026",
+            status=ReferenceDataUpdate.STATUS_COMPLETED,
+            records_loaded=1,
+            completed_at=completed_at,
+            triggered_by="test",
+        )
+        self.npi_reference = NpiReference.objects.create(
+            npi="1234567893",
+            entity_type=NpiReference.ENTITY_ORGANIZATION,
+            provider_name="EMRTS Demo Clinic",
+            primary_taxonomy_code="207Q00000X",
+            city="Durham",
+            state="NC",
+            is_active=True,
+            source_update=nppes_update,
+        )
+        self.low_back_pain = Icd10Code.objects.create(
+            code="M54.50",
+            short_description="Low back pain, unspecified",
+            is_active=True,
+            source_update=icd10_update,
+        )
+        self.headache = Icd10Code.objects.create(
+            code="R51.9",
+            short_description="Headache, unspecified",
+            is_active=True,
+            source_update=icd10_update,
+        )
+        self.office_visit = ProcedureCode.objects.create(
+            code="99213",
+            code_system=ProcedureCode.SYSTEM_CPT,
+            short_description="Office/outpatient visit, established patient",
+            is_active=True,
+            source_update=procedure_update,
+        )
         self.patient = Patient.objects.create(
             first_name="Alex",
             last_name="Morgan",
@@ -52,6 +115,7 @@ class ClaimCaptureWorkflowTests(TestCase):
         self.provider = Provider.objects.create(
             organization_name="EMRTS Demo Clinic",
             npi="1234567893",
+            npi_reference=self.npi_reference,
             taxonomy_code="207Q00000X",
             city="Durham",
             state="NC",
@@ -79,12 +143,14 @@ class ClaimCaptureWorkflowTests(TestCase):
         ClaimDiagnosis.objects.create(
             claim=self.claim,
             diagnosis_code="M54.50",
+            icd10_reference=self.low_back_pain,
             diagnosis_order=1,
             description="Low back pain, unspecified",
         )
         ServiceLine.objects.create(
             claim=self.claim,
             procedure_code="99213",
+            procedure_reference=self.office_visit,
             place_of_service="11",
             diagnosis_pointer_1=1,
             charge_amount=Decimal("125.00"),
@@ -105,6 +171,8 @@ class ClaimCaptureWorkflowTests(TestCase):
         self.assertContains(response, "CLM-TEST-001")
         self.assertContains(response, "Morgan, Alex")
         self.assertContains(response, "Medicare")
+        self.assertContains(response, "Reference Data Readiness")
+        self.assertContains(response, "NPPES / NPI")
 
     def test_claim_detail_loads_related_claim_data(self):
         response = self.client.get(reverse("claims:claim_detail", args=[self.claim.id]))
@@ -119,11 +187,79 @@ class ClaimCaptureWorkflowTests(TestCase):
         self.assertContains(response, "EMRTS Demo Clinic")
         self.assertContains(response, "M54.50")
         self.assertContains(response, "99213")
+        self.assertContains(response, "Reference matched")
 
     def test_capture_claim_form_creates_claim_workflow_records(self):
-        response = self.client.post(
-            reverse("claims:capture_claim"),
-            data={
+        response = self.client.post(reverse("claims:capture_claim"), data=self._capture_payload())
+
+        self.assertEqual(response.status_code, 302)
+
+        claim = Claim.objects.get(claim_number="CLM-TEST-POST-001")
+        self.assertEqual(claim.patient.last_name, "Carter")
+        self.assertEqual(claim.status, Claim.STATUS_READY_FOR_REVIEW)
+        self.assertEqual(claim.validation_status, "reference_validated")
+        self.assertEqual(claim.total_charge_amount, Decimal("150.00"))
+
+        self.assertEqual(claim.coverages.count(), 1)
+        coverage = claim.coverages.select_related("insurance_policy__payer", "insurance_policy__insured_party").get()
+        self.assertEqual(coverage.payer_sequence, ClaimCoverage.PAYER_SEQUENCE_PRIMARY)
+        self.assertEqual(coverage.relationship_to_patient, "self")
+        self.assertTrue(coverage.assignment_of_benefits)
+        self.assertTrue(coverage.release_of_information)
+        self.assertEqual(coverage.prior_authorization_number, "AUTH-123")
+        self.assertEqual(coverage.insurance_policy.payer.payer_name, "Medicare")
+        self.assertEqual(coverage.insurance_policy.member_id, "TEST-MBI-0002")
+        self.assertEqual(coverage.insurance_policy.group_number, "TEST-GROUP")
+        self.assertEqual(coverage.insurance_policy.plan_name, "Test Medicare Plan")
+
+        self.assertEqual(claim.diagnoses.count(), 1)
+        self.assertEqual(claim.diagnoses.get().icd10_reference, self.headache)
+        self.assertEqual(claim.service_lines.count(), 1)
+        self.assertEqual(claim.service_lines.get().procedure_reference, self.office_visit)
+        self.assertEqual(claim.claim_providers.count(), 1)
+        self.assertEqual(claim.claim_providers.get().provider.npi_reference, self.npi_reference)
+        self.assertEqual(claim.audit_events.count(), 1)
+
+    def test_capture_rejects_codes_not_in_active_reference_data(self):
+        payload = self._capture_payload()
+        payload["billing_provider_npi"] = "1234567890"
+        payload["diagnosis_code_1"] = "ZZZ.99"
+        payload["procedure_code"] = "XXXXX"
+
+        response = self.client.post(reverse("claims:capture_claim"), data=payload)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Review the highlighted claim fields")
+        self.assertContains(response, "NPI was not found in the active reference data")
+        self.assertContains(response, "Diagnosis code was not found")
+        self.assertContains(response, "Procedure code was not found")
+        self.assertFalse(Claim.objects.filter(claim_number="CLM-TEST-POST-001").exists())
+
+    def test_capture_rejects_pointer_to_missing_diagnosis(self):
+        payload = self._capture_payload()
+        payload["diagnosis_pointer_1"] = "2"
+
+        response = self.client.post(reverse("claims:capture_claim"), data=payload)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Diagnosis pointer must reference an entered diagnosis code")
+        self.assertFalse(Claim.objects.filter(claim_number="CLM-TEST-POST-001").exists())
+
+    def test_sample_seed_is_idempotent_and_repairs_demo_coverage(self):
+        call_command("seed_sample_claims", verbosity=0)
+        call_command("seed_sample_claims", verbosity=0)
+
+        claim = Claim.objects.get(claim_number="CLM-DEMO-001")
+        coverage = claim.coverages.select_related("insurance_policy__payer").get(
+            payer_sequence=ClaimCoverage.PAYER_SEQUENCE_PRIMARY
+        )
+        self.assertEqual(coverage.insurance_policy.payer.payer_name, "Medicare")
+        self.assertEqual(coverage.insurance_policy.member_id, "DEMO-MBI-0001")
+        self.assertEqual(claim.validation_status, "reference_validated")
+        self.assertEqual(Claim.objects.filter(claim_number="CLM-DEMO-001").count(), 1)
+
+    def _capture_payload(self):
+        return {
                 "patient_first_name": "Jamie",
                 "patient_middle_name": "",
                 "patient_last_name": "Carter",
@@ -155,7 +291,7 @@ class ClaimCaptureWorkflowTests(TestCase):
                 "payer_identifier": "",
                 "medicare_administrative_contractor": "",
                 "billing_provider_name": "EMRTS Test Clinic",
-                "billing_provider_npi": "1234567890",
+                "billing_provider_npi": "1234567893",
                 "billing_provider_taxonomy_code": "207Q00000X",
                 "billing_provider_tax_id": "",
                 "billing_provider_address_line_1": "",
@@ -190,29 +326,4 @@ class ClaimCaptureWorkflowTests(TestCase):
                 "diagnosis_pointer_4": "",
                 "charge_amount": "150.00",
                 "units": "1",
-            },
-        )
-
-        self.assertEqual(response.status_code, 302)
-
-        claim = Claim.objects.get(claim_number="CLM-TEST-POST-001")
-        self.assertEqual(claim.patient.last_name, "Carter")
-        self.assertEqual(claim.status, Claim.STATUS_READY_FOR_REVIEW)
-        self.assertEqual(claim.total_charge_amount, Decimal("150.00"))
-
-        self.assertEqual(claim.coverages.count(), 1)
-        coverage = claim.coverages.select_related("insurance_policy__payer", "insurance_policy__insured_party").get()
-        self.assertEqual(coverage.payer_sequence, ClaimCoverage.PAYER_SEQUENCE_PRIMARY)
-        self.assertEqual(coverage.relationship_to_patient, "self")
-        self.assertTrue(coverage.assignment_of_benefits)
-        self.assertTrue(coverage.release_of_information)
-        self.assertEqual(coverage.prior_authorization_number, "AUTH-123")
-        self.assertEqual(coverage.insurance_policy.payer.payer_name, "Medicare")
-        self.assertEqual(coverage.insurance_policy.member_id, "TEST-MBI-0002")
-        self.assertEqual(coverage.insurance_policy.group_number, "TEST-GROUP")
-        self.assertEqual(coverage.insurance_policy.plan_name, "Test Medicare Plan")
-
-        self.assertEqual(claim.diagnoses.count(), 1)
-        self.assertEqual(claim.service_lines.count(), 1)
-        self.assertEqual(claim.claim_providers.count(), 1)
-        self.assertEqual(claim.audit_events.count(), 1)
+        }

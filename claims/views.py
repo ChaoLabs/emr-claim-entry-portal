@@ -12,11 +12,15 @@ from .models import (
     ClaimCoverage,
     ClaimDiagnosis,
     ClaimProvider,
+    Icd10Code,
     InsurancePolicy,
     InsuredParty,
+    NpiReference,
     Patient,
     Payer,
+    ProcedureCode,
     Provider,
+    ReferenceDataUpdate,
     ServiceLine,
 )
 
@@ -33,8 +37,41 @@ def dashboard(request):
         "claim_count": Claim.objects.count(),
         "draft_count": Claim.objects.filter(status=Claim.STATUS_DRAFT).count(),
         "ready_for_review_count": Claim.objects.filter(status=Claim.STATUS_READY_FOR_REVIEW).count(),
+        "reference_data": [
+            _reference_summary(
+                ReferenceDataUpdate.DATASET_NPPES,
+                "NPPES / NPI",
+                NpiReference.objects.filter(is_active=True).count(),
+            ),
+            _reference_summary(
+                ReferenceDataUpdate.DATASET_ICD10,
+                "ICD-10-CM",
+                Icd10Code.objects.filter(is_active=True).count(),
+            ),
+            _reference_summary(
+                ReferenceDataUpdate.DATASET_PROCEDURE,
+                "CPT / HCPCS",
+                ProcedureCode.objects.filter(is_active=True).count(),
+            ),
+        ],
     }
     return render(request, "claims/dashboard.html", context)
+
+
+def _reference_summary(dataset_name, label, active_count):
+    latest_update = (
+        ReferenceDataUpdate.objects.filter(
+            dataset_name=dataset_name,
+            status=ReferenceDataUpdate.STATUS_COMPLETED,
+        )
+        .order_by("-completed_at", "-created_at")
+        .first()
+    )
+    return {
+        "label": label,
+        "active_count": active_count,
+        "latest_update": latest_update,
+    }
 
 
 def claim_detail(request, claim_id):
@@ -43,9 +80,10 @@ def claim_detail(request, claim_id):
         .prefetch_related(
             "coverages__insurance_policy__insured_party",
             "coverages__insurance_policy__payer",
-            "claim_providers__provider",
-            "diagnoses",
-            "service_lines",
+            "claim_providers__provider__npi_reference",
+            "diagnoses__icd10_reference",
+            "service_lines__procedure_reference",
+            "service_lines__rendering_provider",
             "audit_events",
         ),
         id=claim_id,
@@ -110,9 +148,11 @@ def _save_capture_form(data):
         medicare_administrative_contractor=data.get("medicare_administrative_contractor", ""),
     )
 
+    billing_npi = data.get("billing_provider_npi", "")
     billing_provider = Provider.objects.create(
         organization_name=data["billing_provider_name"],
-        npi=data.get("billing_provider_npi", ""),
+        npi=billing_npi,
+        npi_reference=NpiReference.objects.filter(npi=billing_npi, is_active=True).first(),
         taxonomy_code=data.get("billing_provider_taxonomy_code", ""),
         tax_id=data.get("billing_provider_tax_id", ""),
         address_line_1=data.get("billing_provider_address_line_1", ""),
@@ -136,8 +176,11 @@ def _save_capture_form(data):
         claim_number=claim_number,
         patient=patient,
         status=Claim.STATUS_READY_FOR_REVIEW,
-        validation_status="capture_complete",
-        validation_message="Initial CMS-1500 capture completed through the web form.",
+        validation_status="reference_validated",
+        validation_message=(
+            "CMS-1500 capture completed. Supplied NPI, ICD-10-CM, and procedure codes "
+            "matched active reference records."
+        ),
         service_start_date=data.get("service_start_date"),
         service_end_date=data.get("service_end_date"),
         total_charge_amount=data.get("charge_amount") or 0,
@@ -159,11 +202,14 @@ def _save_capture_form(data):
         provider_role=ClaimProvider.ROLE_BILLING,
     )
 
+    rendering_provider = None
     if data.get("rendering_provider_first_name") or data.get("rendering_provider_last_name") or data.get("rendering_provider_npi"):
+        rendering_npi = data.get("rendering_provider_npi", "")
         rendering_provider = Provider.objects.create(
             first_name=data.get("rendering_provider_first_name", ""),
             last_name=data.get("rendering_provider_last_name", ""),
-            npi=data.get("rendering_provider_npi", ""),
+            npi=rendering_npi,
+            npi_reference=NpiReference.objects.filter(npi=rendering_npi, is_active=True).first(),
         )
         ClaimProvider.objects.create(
             claim=claim,
@@ -174,19 +220,27 @@ def _save_capture_form(data):
     for index in range(1, 5):
         code = data.get(f"diagnosis_code_{index}")
         if code:
+            icd10_reference = Icd10Code.objects.filter(code=code, is_active=True).first()
             ClaimDiagnosis.objects.create(
                 claim=claim,
                 diagnosis_code=code,
+                icd10_reference=icd10_reference,
                 diagnosis_order=index,
-                description=data.get(f"diagnosis_description_{index}", ""),
+                description=(
+                    data.get(f"diagnosis_description_{index}", "")
+                    or (icd10_reference.short_description if icd10_reference else "")
+                ),
             )
 
+    procedure_code = data["procedure_code"]
     ServiceLine.objects.create(
         claim=claim,
         service_from_date=data.get("service_line_from_date"),
         service_to_date=data.get("service_line_to_date"),
         place_of_service=data.get("place_of_service", ""),
-        procedure_code=data["procedure_code"],
+        procedure_code=procedure_code,
+        procedure_reference=ProcedureCode.objects.filter(code=procedure_code, is_active=True).first(),
+        rendering_provider=rendering_provider,
         modifier_1=data.get("modifier_1", ""),
         modifier_2=data.get("modifier_2", ""),
         modifier_3=data.get("modifier_3", ""),

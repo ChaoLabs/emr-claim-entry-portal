@@ -3,37 +3,147 @@
 {% block title %}Dashboard | EMRTS Claim Entry Portal{% endblock %}
 
 {% block content %}
+<style>
+    .metric-grid,
+    .reference-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+    }
+
+    .metric-card,
+    .reference-card {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 18px;
+        background: #fff;
+    }
+
+    .metric-value {
+        font-size: 30px;
+        font-weight: 700;
+        margin-top: 6px;
+    }
+
+    .reference-section {
+        margin: 30px 0;
+        padding: 20px;
+        border: 1px solid #cbdcf0;
+        border-radius: 10px;
+        background: #f7fbff;
+    }
+
+    .reference-heading {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: flex-start;
+        margin-bottom: 16px;
+    }
+
+    .reference-heading h3 {
+        margin: 0 0 4px;
+        color: var(--primary);
+    }
+
+    .reference-card strong {
+        display: block;
+        color: var(--primary);
+        font-size: 16px;
+    }
+
+    .reference-count {
+        font-size: 25px;
+        font-weight: 700;
+        margin: 10px 0 2px;
+    }
+
+    .status-pill {
+        display: inline-block;
+        padding: 4px 9px;
+        border-radius: 999px;
+        background: #e8f5ee;
+        color: var(--success);
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    .table-wrap {
+        overflow-x: auto;
+    }
+
+    @media (max-width: 760px) {
+        .metric-grid,
+        .reference-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .reference-heading {
+            display: block;
+        }
+    }
+</style>
+
 <div class="card">
     <h2 class="page-title">Claim Entry Dashboard</h2>
     <p class="page-subtitle">
         Development dashboard for CMS-1500 claim capture and review.
     </p>
 
-    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 28px;">
-        <div style="border: 1px solid var(--border); border-radius: 8px; padding: 18px;">
+    <div class="metric-grid">
+        <div class="metric-card">
             <div class="muted">Total Claims</div>
-            <div style="font-size: 30px; font-weight: 700; margin-top: 6px;">{{ claim_count }}</div>
+            <div class="metric-value">{{ claim_count }}</div>
         </div>
 
-        <div style="border: 1px solid var(--border); border-radius: 8px; padding: 18px;">
+        <div class="metric-card">
             <div class="muted">Draft Claims</div>
-            <div style="font-size: 30px; font-weight: 700; margin-top: 6px;">{{ draft_count }}</div>
+            <div class="metric-value">{{ draft_count }}</div>
         </div>
 
-        <div style="border: 1px solid var(--border); border-radius: 8px; padding: 18px;">
+        <div class="metric-card">
             <div class="muted">Ready for Review</div>
-            <div style="font-size: 30px; font-weight: 700; margin-top: 6px;">{{ ready_for_review_count }}</div>
+            <div class="metric-value">{{ ready_for_review_count }}</div>
         </div>
     </div>
 
-    <p>
+    <div class="reference-section">
+        <div class="reference-heading">
+            <div>
+                <h3>Reference Data Readiness</h3>
+                <div class="muted">Active records available to validate CMS-1500 provider and code fields.</div>
+            </div>
+            <span class="status-pill">Development subset</span>
+        </div>
+
+        <div class="reference-grid">
+            {% for dataset in reference_data %}
+                <div class="reference-card">
+                    <strong>{{ dataset.label }}</strong>
+                    <div class="reference-count">{{ dataset.active_count }}</div>
+                    <div class="muted">active reference record{{ dataset.active_count|pluralize }}</div>
+                    {% if dataset.latest_update %}
+                        <div style="margin-top: 12px; font-size: 13px;">
+                            Version: {{ dataset.latest_update.source_version|default:"Not specified" }}<br>
+                            Refreshed (UTC): {{ dataset.latest_update.completed_at|date:"Y-m-d H:i" }}
+                        </div>
+                    {% else %}
+                        <div class="muted" style="margin-top: 12px; font-size: 13px;">No completed refresh recorded.</div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <p style="margin: 0 0 28px;">
         <a class="button" href="{% url 'claims:capture_claim' %}">Capture New CMS-1500 Claim</a>
     </p>
 
     <h3 style="margin-top: 32px;">Recent Claims</h3>
 
     {% if recent_claims %}
-        <table style="width: 100%; border-collapse: collapse; margin-top: 12px;">
+        <div class="table-wrap">
+        <table style="width: 100%; border-collapse: collapse; margin-top: 12px; min-width: 760px;">
             <thead>
                 <tr style="border-bottom: 1px solid var(--border); text-align: left;">
                     <th style="padding: 10px;">Claim Number</th>
@@ -59,7 +169,7 @@
                                         {{ coverage.insurance_policy.payer }}
                                     {% endif %}
                                 {% empty %}
-                                    -
+                                    <span class="muted">Not recorded</span>
                                 {% endfor %}
                             </td>
                         <td style="padding: 10px;">{{ claim.get_status_display }}</td>
@@ -69,6 +179,7 @@
                 {% endfor %}
             </tbody>
         </table>
+        </div>
     {% else %}
         <p class="muted">
             No claims have been captured yet. Use the capture form to create the first development claim.

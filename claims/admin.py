@@ -6,11 +6,15 @@ from .models import (
     ClaimCoverage,
     ClaimDiagnosis,
     ClaimProvider,
+    Icd10Code,
     InsurancePolicy,
     InsuredParty,
+    NpiReference,
     Patient,
     Payer,
+    ProcedureCode,
     Provider,
+    ReferenceDataUpdate,
     ServiceLine,
 )
 
@@ -151,8 +155,24 @@ class ClaimCoverageAdmin(admin.ModelAdmin):
 
 @admin.register(Provider)
 class ProviderAdmin(admin.ModelAdmin):
-    list_display = ("organization_name", "last_name", "first_name", "npi", "taxonomy_code", "city", "state")
-    search_fields = ("organization_name", "first_name", "last_name", "npi", "taxonomy_code")
+    list_display = (
+        "organization_name",
+        "last_name",
+        "first_name",
+        "npi",
+        "npi_reference",
+        "taxonomy_code",
+        "city",
+        "state",
+    )
+    search_fields = (
+        "organization_name",
+        "first_name",
+        "last_name",
+        "npi",
+        "npi_reference__provider_name",
+        "taxonomy_code",
+    )
     list_filter = ("state",)
     ordering = ("organization_name", "last_name", "first_name")
 
@@ -166,15 +186,36 @@ class ClaimProviderAdmin(admin.ModelAdmin):
 
 @admin.register(ClaimDiagnosis)
 class ClaimDiagnosisAdmin(admin.ModelAdmin):
-    list_display = ("claim", "diagnosis_order", "diagnosis_code", "description")
-    search_fields = ("claim__claim_number", "diagnosis_code", "description")
+    list_display = ("claim", "diagnosis_order", "diagnosis_code", "icd10_reference", "description")
+    search_fields = (
+        "claim__claim_number",
+        "diagnosis_code",
+        "icd10_reference__short_description",
+        "description",
+    )
     ordering = ("claim", "diagnosis_order")
 
 
 @admin.register(ServiceLine)
 class ServiceLineAdmin(admin.ModelAdmin):
-    list_display = ("claim", "service_from_date", "service_to_date", "procedure_code", "charge_amount", "units")
-    search_fields = ("claim__claim_number", "procedure_code")
+    list_display = (
+        "claim",
+        "service_from_date",
+        "service_to_date",
+        "procedure_code",
+        "procedure_reference",
+        "rendering_provider",
+        "charge_amount",
+        "units",
+    )
+    search_fields = (
+        "claim__claim_number",
+        "procedure_code",
+        "procedure_reference__short_description",
+        "rendering_provider__organization_name",
+        "rendering_provider__first_name",
+        "rendering_provider__last_name",
+    )
     ordering = ("claim", "service_from_date")
 
 
@@ -185,3 +226,65 @@ class ClaimAuditEventAdmin(admin.ModelAdmin):
     search_fields = ("claim__claim_number", "event_type", "event_description", "changed_by")
     readonly_fields = ("created_at",)
     ordering = ("-created_at",)
+
+
+@admin.register(ReferenceDataUpdate)
+class ReferenceDataUpdateAdmin(admin.ModelAdmin):
+    list_display = (
+        "dataset_name",
+        "source_name",
+        "source_version",
+        "status",
+        "records_loaded",
+        "completed_at",
+    )
+    list_filter = ("dataset_name", "status")
+    search_fields = ("source_name", "source_version", "notes")
+    readonly_fields = ("created_at", "updated_at")
+    ordering = ("-completed_at", "-created_at")
+
+
+@admin.register(NpiReference)
+class NpiReferenceAdmin(admin.ModelAdmin):
+    list_display = (
+        "npi",
+        "provider_name",
+        "entity_type",
+        "primary_taxonomy_code",
+        "city",
+        "state",
+        "is_active",
+        "source_last_updated_date",
+    )
+    list_filter = ("entity_type", "is_active", "state")
+    search_fields = ("npi", "provider_name", "primary_taxonomy_code", "city", "state")
+    ordering = ("provider_name", "npi")
+
+
+@admin.register(Icd10Code)
+class Icd10CodeAdmin(admin.ModelAdmin):
+    list_display = (
+        "code",
+        "short_description",
+        "effective_start_date",
+        "effective_end_date",
+        "is_active",
+    )
+    list_filter = ("is_active",)
+    search_fields = ("code", "short_description", "long_description")
+    ordering = ("code",)
+
+
+@admin.register(ProcedureCode)
+class ProcedureCodeAdmin(admin.ModelAdmin):
+    list_display = (
+        "code",
+        "code_system",
+        "short_description",
+        "effective_start_date",
+        "effective_end_date",
+        "is_active",
+    )
+    list_filter = ("code_system", "is_active")
+    search_fields = ("code", "short_description", "long_description")
+    ordering = ("code_system", "code")

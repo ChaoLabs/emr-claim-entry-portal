@@ -1,5 +1,7 @@
 from django import forms
 
+from .models import Icd10Code, NpiReference, ProcedureCode
+
 
 class CMS1500CaptureForm(forms.Form):
     """Single-screen development form for capturing core CMS-1500 claim information.
@@ -110,7 +112,12 @@ class CMS1500CaptureForm(forms.Form):
 
     # Provider information
     billing_provider_name = forms.CharField(label="Billing Provider / Organization Name", max_length=255)
-    billing_provider_npi = forms.CharField(label="Billing Provider NPI", max_length=20, required=False)
+    billing_provider_npi = forms.CharField(
+        label="Billing Provider NPI",
+        max_length=20,
+        required=False,
+        help_text="If entered, the NPI must match an active NPI reference record.",
+    )
     billing_provider_taxonomy_code = forms.CharField(
         label="Billing Provider Taxonomy Code",
         max_length=20,
@@ -136,7 +143,12 @@ class CMS1500CaptureForm(forms.Form):
         max_length=100,
         required=False,
     )
-    rendering_provider_npi = forms.CharField(label="Rendering Provider NPI", max_length=20, required=False)
+    rendering_provider_npi = forms.CharField(
+        label="Rendering Provider NPI",
+        max_length=20,
+        required=False,
+        help_text="If entered, the NPI must match an active NPI reference record.",
+    )
 
     # Claim header
     claim_number = forms.CharField(label="Claim Number", max_length=100, required=False)
@@ -152,7 +164,11 @@ class CMS1500CaptureForm(forms.Form):
     )
 
     # Diagnosis information
-    diagnosis_code_1 = forms.CharField(label="Diagnosis Code 1", max_length=20)
+    diagnosis_code_1 = forms.CharField(
+        label="Diagnosis Code 1",
+        max_length=20,
+        help_text="Validated against the active ICD-10-CM reference subset.",
+    )
     diagnosis_description_1 = forms.CharField(label="Diagnosis Description 1", max_length=255, required=False)
     diagnosis_code_2 = forms.CharField(label="Diagnosis Code 2", max_length=20, required=False)
     diagnosis_description_2 = forms.CharField(label="Diagnosis Description 2", max_length=255, required=False)
@@ -173,7 +189,11 @@ class CMS1500CaptureForm(forms.Form):
         widget=forms.DateInput(attrs={"type": "date"}),
     )
     place_of_service = forms.CharField(label="Place of Service", max_length=10, required=False)
-    procedure_code = forms.CharField(label="Procedure Code / CPT / HCPCS", max_length=20)
+    procedure_code = forms.CharField(
+        label="Procedure Code / CPT / HCPCS",
+        max_length=20,
+        help_text="Validated against the active CPT / HCPCS reference subset.",
+    )
     modifier_1 = forms.CharField(label="Modifier 1", max_length=10, required=False)
     modifier_2 = forms.CharField(label="Modifier 2", max_length=10, required=False)
     modifier_3 = forms.CharField(label="Modifier 3", max_length=10, required=False)
@@ -206,5 +226,44 @@ class CMS1500CaptureForm(forms.Form):
         line_to_date = cleaned_data.get("service_line_to_date")
         if line_from_date and line_to_date and line_to_date < line_from_date:
             raise forms.ValidationError("Service line end date cannot be before service line start date.")
+
+        for field_name in ("billing_provider_npi", "rendering_provider_npi"):
+            npi = (cleaned_data.get(field_name) or "").strip()
+            cleaned_data[field_name] = npi
+            if not npi:
+                continue
+            if len(npi) != 10 or not npi.isdigit():
+                self.add_error(field_name, "NPI must contain exactly 10 digits.")
+                continue
+            if not NpiReference.objects.filter(npi=npi, is_active=True).exists():
+                self.add_error(field_name, "NPI was not found in the active reference data.")
+
+        entered_diagnosis_orders = set()
+        for index in range(1, 5):
+            field_name = f"diagnosis_code_{index}"
+            code = (cleaned_data.get(field_name) or "").strip().upper()
+            cleaned_data[field_name] = code
+            if not code:
+                continue
+            entered_diagnosis_orders.add(index)
+            if not Icd10Code.objects.filter(code=code, is_active=True).exists():
+                self.add_error(field_name, "Diagnosis code was not found in the active ICD-10-CM reference data.")
+
+        procedure_code = (cleaned_data.get("procedure_code") or "").strip().upper()
+        cleaned_data["procedure_code"] = procedure_code
+        if procedure_code and not ProcedureCode.objects.filter(code=procedure_code, is_active=True).exists():
+            self.add_error(
+                "procedure_code",
+                "Procedure code was not found in the active CPT / HCPCS reference data.",
+            )
+
+        for index in range(1, 5):
+            field_name = f"diagnosis_pointer_{index}"
+            pointer = cleaned_data.get(field_name)
+            if pointer and pointer not in entered_diagnosis_orders:
+                self.add_error(
+                    field_name,
+                    "Diagnosis pointer must reference an entered diagnosis code.",
+                )
 
         return cleaned_data

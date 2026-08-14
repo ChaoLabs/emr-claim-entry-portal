@@ -63,6 +63,45 @@
         gap: 12px;
         align-items: center;
     }
+
+    .validation-note {
+        border-left: 4px solid var(--primary);
+        background: #f1f7fd;
+        border-radius: 6px;
+        padding: 12px 14px;
+        margin-bottom: 20px;
+        color: #274c6b;
+    }
+
+    .form-error-summary {
+        border: 1px solid #f0b8b3;
+        border-left: 4px solid var(--danger);
+        background: #fff5f4;
+        border-radius: 6px;
+        padding: 14px 16px;
+        margin-bottom: 20px;
+    }
+
+    .form-error-summary h3 {
+        margin: 0 0 8px;
+        color: var(--danger);
+        font-size: 17px;
+    }
+
+    .form-error-summary ul {
+        margin: 0;
+        padding-left: 20px;
+    }
+
+    .form-error-summary a {
+        color: var(--danger);
+    }
+
+    @media (max-width: 760px) {
+        .form-grid {
+            grid-template-columns: 1fr;
+        }
+    }
 </style>
 
 <div class="card">
@@ -72,14 +111,29 @@
         Do not enter real PHI.
     </p>
 
+    <div class="validation-note">
+        <strong>Reference validation enabled.</strong>
+        Entered NPI, ICD-10-CM, and CPT / HCPCS values are checked against the active development reference subset before the claim is saved.
+    </div>
+
+    {% if form.errors %}
+        <div class="form-error-summary" role="alert" aria-labelledby="form-error-heading">
+            <h3 id="form-error-heading">Review the highlighted claim fields</h3>
+            <ul>
+                {% for field in form %}
+                    {% for error in field.errors %}
+                        <li><a href="#{{ field.id_for_label }}">{{ field.label }}: {{ error }}</a></li>
+                    {% endfor %}
+                {% endfor %}
+                {% for error in form.non_field_errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
     <form method="post" novalidate>
         {% csrf_token %}
-
-        {% if form.non_field_errors %}
-            <div class="form-section">
-                {{ form.non_field_errors }}
-            </div>
-        {% endif %}
 
         <section class="form-section">
             <h3>Patient Information</h3>
@@ -148,7 +202,7 @@
             <h3>Provider Information</h3>
             <div class="form-grid">
                 <div class="form-field full-width">{{ form.billing_provider_name.label_tag }}{{ form.billing_provider_name }}{{ form.billing_provider_name.errors }}</div>
-                <div class="form-field">{{ form.billing_provider_npi.label_tag }}{{ form.billing_provider_npi }}{{ form.billing_provider_npi.errors }}</div>
+                <div class="form-field">{{ form.billing_provider_npi.label_tag }}{{ form.billing_provider_npi }}{% if form.billing_provider_npi.help_text %}<span class="helptext">{{ form.billing_provider_npi.help_text }}</span>{% endif %}{{ form.billing_provider_npi.errors }}</div>
                 <div class="form-field">{{ form.billing_provider_taxonomy_code.label_tag }}{{ form.billing_provider_taxonomy_code }}{{ form.billing_provider_taxonomy_code.errors }}</div>
                 <div class="form-field">{{ form.billing_provider_tax_id.label_tag }}{{ form.billing_provider_tax_id }}{{ form.billing_provider_tax_id.errors }}</div>
                 <div class="form-field full-width">{{ form.billing_provider_address_line_1.label_tag }}{{ form.billing_provider_address_line_1 }}{{ form.billing_provider_address_line_1.errors }}</div>
@@ -157,7 +211,7 @@
                 <div class="form-field">{{ form.billing_provider_zip_code.label_tag }}{{ form.billing_provider_zip_code }}{{ form.billing_provider_zip_code.errors }}</div>
                 <div class="form-field">{{ form.rendering_provider_first_name.label_tag }}{{ form.rendering_provider_first_name }}{{ form.rendering_provider_first_name.errors }}</div>
                 <div class="form-field">{{ form.rendering_provider_last_name.label_tag }}{{ form.rendering_provider_last_name }}{{ form.rendering_provider_last_name.errors }}</div>
-                <div class="form-field">{{ form.rendering_provider_npi.label_tag }}{{ form.rendering_provider_npi }}{{ form.rendering_provider_npi.errors }}</div>
+                <div class="form-field">{{ form.rendering_provider_npi.label_tag }}{{ form.rendering_provider_npi }}{% if form.rendering_provider_npi.help_text %}<span class="helptext">{{ form.rendering_provider_npi.help_text }}</span>{% endif %}{{ form.rendering_provider_npi.errors }}</div>
             </div>
         </section>
 
@@ -173,7 +227,7 @@
         <section class="form-section">
             <h3>Diagnosis Information</h3>
             <div class="form-grid">
-                <div class="form-field">{{ form.diagnosis_code_1.label_tag }}{{ form.diagnosis_code_1 }}{{ form.diagnosis_code_1.errors }}</div>
+                <div class="form-field">{{ form.diagnosis_code_1.label_tag }}{{ form.diagnosis_code_1 }}{% if form.diagnosis_code_1.help_text %}<span class="helptext">{{ form.diagnosis_code_1.help_text }}</span>{% endif %}{{ form.diagnosis_code_1.errors }}</div>
                 <div class="form-field">{{ form.diagnosis_description_1.label_tag }}{{ form.diagnosis_description_1 }}{{ form.diagnosis_description_1.errors }}</div>
                 <div class="form-field">{{ form.diagnosis_code_2.label_tag }}{{ form.diagnosis_code_2 }}{{ form.diagnosis_code_2.errors }}</div>
                 <div class="form-field">{{ form.diagnosis_description_2.label_tag }}{{ form.diagnosis_description_2 }}{{ form.diagnosis_description_2.errors }}</div>
@@ -190,7 +244,7 @@
                 <div class="form-field">{{ form.service_line_from_date.label_tag }}{{ form.service_line_from_date }}{{ form.service_line_from_date.errors }}</div>
                 <div class="form-field">{{ form.service_line_to_date.label_tag }}{{ form.service_line_to_date }}{{ form.service_line_to_date.errors }}</div>
                 <div class="form-field">{{ form.place_of_service.label_tag }}{{ form.place_of_service }}{{ form.place_of_service.errors }}</div>
-                <div class="form-field">{{ form.procedure_code.label_tag }}{{ form.procedure_code }}{{ form.procedure_code.errors }}</div>
+                <div class="form-field">{{ form.procedure_code.label_tag }}{{ form.procedure_code }}{% if form.procedure_code.help_text %}<span class="helptext">{{ form.procedure_code.help_text }}</span>{% endif %}{{ form.procedure_code.errors }}</div>
                 <div class="form-field">{{ form.modifier_1.label_tag }}{{ form.modifier_1 }}{{ form.modifier_1.errors }}</div>
                 <div class="form-field">{{ form.modifier_2.label_tag }}{{ form.modifier_2 }}{{ form.modifier_2.errors }}</div>
                 <div class="form-field">{{ form.modifier_3.label_tag }}{{ form.modifier_3 }}{{ form.modifier_3.errors }}</div>

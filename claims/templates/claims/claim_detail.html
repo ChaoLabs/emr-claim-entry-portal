@@ -63,6 +63,21 @@
         color: var(--primary);
         font-weight: 700;
         font-size: 12px;
+        white-space: nowrap;
+    }
+
+    .reference-match {
+        background: #e8f5ee;
+        color: var(--success);
+    }
+
+    .reference-unmatched {
+        background: #fff7e6;
+        color: var(--warning);
+    }
+
+    .table-wrap {
+        overflow-x: auto;
     }
 
     .actions {
@@ -92,7 +107,11 @@
             </div>
             <div class="field-row">
                 <span class="field-label">Validation Status:</span>
-                {{ claim.validation_status|default:"-" }}
+                {% if claim.validation_status == "reference_validated" %}
+                    <span class="status-pill reference-match">Reference validated</span>
+                {% else %}
+                    {{ claim.validation_status|default:"-" }}
+                {% endif %}
             </div>
             <div class="field-row">
                 <span class="field-label">Total Charge:</span>
@@ -129,7 +148,7 @@
     <div class="detail-section">
         <h3>Coverage / Policy Information</h3>
         {% if claim.coverages.all %}
-            <table>
+            <div class="table-wrap"><table>
                 <thead>
                     <tr>
                         <th>Sequence</th>
@@ -158,7 +177,7 @@
                         </tr>
                     {% endfor %}
                 </tbody>
-            </table>
+            </table></div>
         {% else %}
             <p class="muted">No coverage or payer information recorded.</p>
         {% endif %}
@@ -173,6 +192,7 @@
                         <th>Role</th>
                         <th>Provider</th>
                         <th>NPI</th>
+                        <th>Reference Status</th>
                         <th>Taxonomy</th>
                         <th>Location</th>
                     </tr>
@@ -183,6 +203,13 @@
                             <td>{{ claim_provider.get_provider_role_display }}</td>
                             <td>{{ claim_provider.provider }}</td>
                             <td>{{ claim_provider.provider.npi|default:"-" }}</td>
+                            <td>
+                                {% if claim_provider.provider.npi_reference %}
+                                    <span class="status-pill reference-match">Reference matched</span>
+                                {% else %}
+                                    <span class="status-pill reference-unmatched">Not linked</span>
+                                {% endif %}
+                            </td>
                             <td>{{ claim_provider.provider.taxonomy_code|default:"-" }}</td>
                             <td>
                                 {{ claim_provider.provider.city|default:"-" }}
@@ -206,6 +233,7 @@
                         <th>Order</th>
                         <th>Diagnosis Code</th>
                         <th>Description</th>
+                        <th>Reference Status</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -214,6 +242,13 @@
                             <td>{{ diagnosis.diagnosis_order }}</td>
                             <td>{{ diagnosis.diagnosis_code }}</td>
                             <td>{{ diagnosis.description|default:"-" }}</td>
+                            <td>
+                                {% if diagnosis.icd10_reference %}
+                                    <span class="status-pill reference-match">Reference matched</span>
+                                {% else %}
+                                    <span class="status-pill reference-unmatched">Not linked</span>
+                                {% endif %}
+                            </td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -233,6 +268,8 @@
                         <th>To</th>
                         <th>POS</th>
                         <th>Procedure</th>
+                        <th>Reference Status</th>
+                        <th>Rendering Provider</th>
                         <th>Modifiers</th>
                         <th>Diagnosis Pointers</th>
                         <th>Charge</th>
@@ -246,6 +283,14 @@
                             <td>{{ line.service_to_date|default:"-" }}</td>
                             <td>{{ line.place_of_service|default:"-" }}</td>
                             <td>{{ line.procedure_code }}</td>
+                            <td>
+                                {% if line.procedure_reference %}
+                                    <span class="status-pill reference-match">Reference matched</span>
+                                {% else %}
+                                    <span class="status-pill reference-unmatched">Not linked</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ line.rendering_provider|default:"-" }}</td>
                             <td>
                                 {{ line.modifier_1 }}
                                 {{ line.modifier_2 }}

@@ -11,6 +11,160 @@ class TimeStampedModel(models.Model):
         abstract = True
 
 
+class ReferenceDataUpdate(TimeStampedModel):
+    """Auditable source and execution metadata for a reference-data refresh."""
+
+    DATASET_NPPES = "nppes"
+    DATASET_ICD10 = "icd10_cm"
+    DATASET_PROCEDURE = "procedure_codes"
+
+    DATASET_CHOICES = [
+        (DATASET_NPPES, "NPPES / NPI"),
+        (DATASET_ICD10, "ICD-10-CM"),
+        (DATASET_PROCEDURE, "CPT / HCPCS"),
+    ]
+
+    STATUS_PENDING = "pending"
+    STATUS_COMPLETED = "completed"
+    STATUS_FAILED = "failed"
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_COMPLETED, "Completed"),
+        (STATUS_FAILED, "Failed"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    dataset_name = models.CharField(max_length=50, choices=DATASET_CHOICES)
+    source_name = models.CharField(max_length=255)
+    source_version = models.CharField(max_length=100, blank=True)
+    source_url = models.URLField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    records_loaded = models.PositiveIntegerField(default=0)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    triggered_by = models.CharField(max_length=100, blank=True)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-completed_at", "-created_at"]
+        indexes = [
+            models.Index(fields=["dataset_name", "status"]),
+            models.Index(fields=["completed_at"]),
+        ]
+
+    def __str__(self):
+        version = self.source_version or self.get_status_display()
+        return f"{self.get_dataset_name_display()} - {version}"
+
+
+class NpiReference(TimeStampedModel):
+    """Minimal NPPES-derived record used to validate an entered NPI."""
+
+    ENTITY_INDIVIDUAL = "individual"
+    ENTITY_ORGANIZATION = "organization"
+
+    ENTITY_TYPE_CHOICES = [
+        (ENTITY_INDIVIDUAL, "Individual"),
+        (ENTITY_ORGANIZATION, "Organization"),
+    ]
+
+    npi = models.CharField(max_length=10, primary_key=True)
+    entity_type = models.CharField(max_length=20, choices=ENTITY_TYPE_CHOICES)
+    provider_name = models.CharField(max_length=255)
+    primary_taxonomy_code = models.CharField(max_length=20, blank=True)
+    city = models.CharField(max_length=100, blank=True)
+    state = models.CharField(max_length=2, blank=True)
+    zip_code = models.CharField(max_length=20, blank=True)
+    enumeration_date = models.DateField(null=True, blank=True)
+    source_last_updated_date = models.DateField(null=True, blank=True)
+    deactivation_date = models.DateField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    source_update = models.ForeignKey(
+        ReferenceDataUpdate,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="npi_records",
+    )
+
+    class Meta:
+        ordering = ["provider_name", "npi"]
+        indexes = [
+            models.Index(fields=["provider_name"]),
+            models.Index(fields=["primary_taxonomy_code"]),
+            models.Index(fields=["is_active"]),
+        ]
+
+    def __str__(self):
+        return f"{self.npi} - {self.provider_name}"
+
+
+class Icd10Code(TimeStampedModel):
+    """Version-aware ICD-10-CM diagnosis-code reference."""
+
+    code = models.CharField(max_length=10, primary_key=True)
+    short_description = models.CharField(max_length=255)
+    long_description = models.TextField(blank=True)
+    effective_start_date = models.DateField(null=True, blank=True)
+    effective_end_date = models.DateField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    source_update = models.ForeignKey(
+        ReferenceDataUpdate,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="icd10_records",
+    )
+
+    class Meta:
+        ordering = ["code"]
+        indexes = [
+            models.Index(fields=["is_active"]),
+            models.Index(fields=["effective_start_date", "effective_end_date"]),
+        ]
+
+    def __str__(self):
+        return f"{self.code} - {self.short_description}"
+
+
+class ProcedureCode(TimeStampedModel):
+    """Reference for professional-claim CPT and HCPCS Level II codes."""
+
+    SYSTEM_CPT = "cpt"
+    SYSTEM_HCPCS_LEVEL_II = "hcpcs_level_ii"
+
+    CODE_SYSTEM_CHOICES = [
+        (SYSTEM_CPT, "CPT / HCPCS Level I"),
+        (SYSTEM_HCPCS_LEVEL_II, "HCPCS Level II"),
+    ]
+
+    code = models.CharField(max_length=10, primary_key=True)
+    code_system = models.CharField(max_length=30, choices=CODE_SYSTEM_CHOICES)
+    short_description = models.CharField(max_length=255)
+    long_description = models.TextField(blank=True)
+    effective_start_date = models.DateField(null=True, blank=True)
+    effective_end_date = models.DateField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    source_update = models.ForeignKey(
+        ReferenceDataUpdate,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="procedure_records",
+    )
+
+    class Meta:
+        ordering = ["code_system", "code"]
+        indexes = [
+            models.Index(fields=["code_system", "is_active"]),
+            models.Index(fields=["effective_start_date", "effective_end_date"]),
+        ]
+
+    def __str__(self):
+        return f"{self.code} - {self.short_description}"
+
+
 class Patient(TimeStampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
@@ -161,6 +315,13 @@ class Provider(TimeStampedModel):
     last_name = models.CharField(max_length=100, blank=True)
 
     npi = models.CharField(max_length=20, blank=True)
+    npi_reference = models.ForeignKey(
+        NpiReference,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="provider_records",
+    )
     taxonomy_code = models.CharField(max_length=20, blank=True)
     tax_id = models.CharField(max_length=50, blank=True)
 
@@ -325,6 +486,13 @@ class ClaimDiagnosis(TimeStampedModel):
 
     claim = models.ForeignKey(Claim, on_delete=models.CASCADE, related_name="diagnoses")
     diagnosis_code = models.CharField(max_length=20)
+    icd10_reference = models.ForeignKey(
+        Icd10Code,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="claim_diagnoses",
+    )
     diagnosis_order = models.PositiveIntegerField()
     description = models.CharField(max_length=255, blank=True)
 
@@ -355,6 +523,20 @@ class ServiceLine(TimeStampedModel):
     place_of_service = models.CharField(max_length=10, blank=True)
 
     procedure_code = models.CharField(max_length=20)
+    procedure_reference = models.ForeignKey(
+        ProcedureCode,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="service_lines",
+    )
+    rendering_provider = models.ForeignKey(
+        Provider,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="rendered_service_lines",
+    )
     modifier_1 = models.CharField(max_length=10, blank=True)
     modifier_2 = models.CharField(max_length=10, blank=True)
     modifier_3 = models.CharField(max_length=10, blank=True)

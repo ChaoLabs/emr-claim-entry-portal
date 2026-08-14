@@ -2,7 +2,7 @@
 
 This logical data model combines normalized CMS-1500 claim and coverage records with focused reference entities for NPI, ICD-10-CM, and CPT / HCPCS validation.
 
-## Final ERD
+## ERD
 
 ```mermaid
 erDiagram

@@ -192,6 +192,7 @@ The model has three clear areas:
 ## Important modeling decisions
 
 - The original `npi`, `diagnosis_code`, and `procedure_code` strings remain on transactional rows as **claim-time snapshots**. Nullable reference keys add validation and descriptions without rewriting history when an external code set changes.
+- A claim can own any number of service-line records. The web capture workflow adds lines dynamically instead of enforcing the paper form's six-line layout limit.
 - `service_lines.rendering_provider_id` is a direct relationship because rendering provider information is service-line context (CMS-1500 Item 24J).
 - The four diagnosis-pointer columns are retained because they directly represent CMS-1500 Item 24E's bounded positions 1–4. A separate join table would add complexity without improving this bounded relationship.
 - `claim_coverages` separates a claim from a reusable insurance policy and supports primary, secondary, and tertiary coverage without duplicating subscriber and payer data.

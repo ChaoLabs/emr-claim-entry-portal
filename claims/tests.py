@@ -189,6 +189,16 @@ class ClaimCaptureWorkflowTests(TestCase):
         self.assertContains(response, "99213")
         self.assertContains(response, "Reference matched")
 
+    def test_capture_claim_form_exposes_dynamic_service_line_controls(self):
+        response = self.client.get(reverse("claims:capture_claim"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["service_line_formset"].total_form_count(), 1)
+        self.assertContains(response, 'id="id_service_lines-TOTAL_FORMS"')
+        self.assertContains(response, 'id="add-service-line"')
+        self.assertContains(response, 'id="empty-service-line-form"')
+        self.assertContains(response, "Add Service Line")
+
     def test_capture_claim_form_creates_claim_workflow_records(self):
         response = self.client.post(reverse("claims:capture_claim"), data=self._capture_payload())
 
@@ -231,11 +241,71 @@ class ClaimCaptureWorkflowTests(TestCase):
         self.assertContains(detail_response, "59")
         self.assertContains(detail_response, "KX")
 
+    def test_capture_claim_accepts_more_than_six_service_lines_and_sums_charges(self):
+        payload = self._capture_payload()
+        payload["claim_number"] = "CLM-TEST-MULTI-001"
+        payload["service_lines-TOTAL_FORMS"] = "7"
+
+        for index in range(7):
+            payload.update(
+                self._service_line_payload(
+                    index,
+                    charge_amount=f"{index + 1}0.00",
+                    modifier_1=f"M{index + 1}",
+                )
+            )
+
+        response = self.client.post(reverse("claims:capture_claim"), data=payload)
+
+        self.assertEqual(response.status_code, 302)
+        claim = Claim.objects.get(claim_number="CLM-TEST-MULTI-001")
+        self.assertEqual(claim.service_lines.count(), 7)
+        self.assertEqual(claim.total_charge_amount, Decimal("280.00"))
+        self.assertEqual(
+            list(claim.service_lines.order_by("created_at").values_list("modifier_1", flat=True)),
+            ["M1", "M2", "M3", "M4", "M5", "M6", "M7"],
+        )
+
+        detail_response = self.client.get(reverse("claims:claim_detail", args=[claim.id]))
+        self.assertContains(detail_response, "99213", count=7)
+        self.assertContains(detail_response, "M7")
+
+    def test_capture_claim_ignores_a_removed_service_line(self):
+        payload = self._capture_payload()
+        payload["claim_number"] = "CLM-TEST-REMOVE-001"
+        payload["service_lines-TOTAL_FORMS"] = "2"
+        payload.update(self._service_line_payload(1, charge_amount="75.00", modifier_1="59"))
+        payload["service_lines-0-DELETE"] = "on"
+
+        response = self.client.post(reverse("claims:capture_claim"), data=payload)
+
+        self.assertEqual(response.status_code, 302)
+        claim = Claim.objects.get(claim_number="CLM-TEST-REMOVE-001")
+        self.assertEqual(claim.service_lines.count(), 1)
+        self.assertEqual(claim.total_charge_amount, Decimal("75.00"))
+        self.assertEqual(claim.service_lines.get().modifier_1, "59")
+
+    def test_capture_rejects_a_duplicate_claim_number_without_partial_records(self):
+        existing_claim = Claim.objects.create(
+            claim_number="CLM-TEST-POST-001",
+            patient=Patient.objects.create(first_name="Existing", last_name="Patient"),
+        )
+        patient_count = Patient.objects.count()
+
+        response = self.client.post(reverse("claims:capture_claim"), data=self._capture_payload())
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "A claim with this claim number already exists.")
+        self.assertContains(response, "Jamie")
+        self.assertEqual(Claim.objects.filter(claim_number="CLM-TEST-POST-001").count(), 1)
+        self.assertEqual(Claim.objects.get(claim_number="CLM-TEST-POST-001"), existing_claim)
+        self.assertEqual(Patient.objects.count(), patient_count)
+
     def test_capture_rejects_codes_not_in_active_reference_data(self):
         payload = self._capture_payload()
         payload["billing_provider_npi"] = "1234567890"
         payload["diagnosis_code_1"] = "ZZZ.99"
-        payload["procedure_code"] = "XXXXX"
+        payload["service_lines-0-procedure_code"] = "XXXXX"
 
         response = self.client.post(reverse("claims:capture_claim"), data=payload)
 
@@ -248,7 +318,7 @@ class ClaimCaptureWorkflowTests(TestCase):
 
     def test_capture_rejects_pointer_to_missing_diagnosis(self):
         payload = self._capture_payload()
-        payload["diagnosis_pointer_1"] = "2"
+        payload["service_lines-0-diagnosis_pointer_1"] = "2"
 
         response = self.client.post(reverse("claims:capture_claim"), data=payload)
 
@@ -270,7 +340,7 @@ class ClaimCaptureWorkflowTests(TestCase):
         self.assertEqual(Claim.objects.filter(claim_number="CLM-DEMO-001").count(), 1)
 
     def _capture_payload(self):
-        return {
+        payload = {
                 "patient_first_name": "Jamie",
                 "patient_middle_name": "",
                 "patient_last_name": "Carter",
@@ -323,18 +393,29 @@ class ClaimCaptureWorkflowTests(TestCase):
                 "diagnosis_description_3": "",
                 "diagnosis_code_4": "",
                 "diagnosis_description_4": "",
-                "service_line_from_date": "",
-                "service_line_to_date": "",
-                "place_of_service": "11",
-                "procedure_code": "99213",
-                "modifier_1": "25",
-                "modifier_2": "GT",
-                "modifier_3": "59",
-                "modifier_4": "KX",
-                "diagnosis_pointer_1": "1",
-                "diagnosis_pointer_2": "",
-                "diagnosis_pointer_3": "",
-                "diagnosis_pointer_4": "",
-                "charge_amount": "150.00",
-                "units": "1",
+                "service_lines-TOTAL_FORMS": "1",
+                "service_lines-INITIAL_FORMS": "0",
+                "service_lines-MIN_NUM_FORMS": "1",
+                "service_lines-MAX_NUM_FORMS": "1000",
+        }
+        payload.update(self._service_line_payload(0))
+        return payload
+
+    def _service_line_payload(self, index, charge_amount="150.00", modifier_1="25"):
+        prefix = f"service_lines-{index}"
+        return {
+            f"{prefix}-service_line_from_date": "",
+            f"{prefix}-service_line_to_date": "",
+            f"{prefix}-place_of_service": "11",
+            f"{prefix}-procedure_code": "99213",
+            f"{prefix}-modifier_1": modifier_1,
+            f"{prefix}-modifier_2": "GT",
+            f"{prefix}-modifier_3": "59",
+            f"{prefix}-modifier_4": "KX",
+            f"{prefix}-diagnosis_pointer_1": "1",
+            f"{prefix}-diagnosis_pointer_2": "",
+            f"{prefix}-diagnosis_pointer_3": "",
+            f"{prefix}-diagnosis_pointer_4": "",
+            f"{prefix}-charge_amount": charge_amount,
+            f"{prefix}-units": "1",
         }

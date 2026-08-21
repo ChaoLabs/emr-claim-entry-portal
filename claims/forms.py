@@ -1,14 +1,83 @@
 from django import forms
 
-from .models import Icd10Code, NpiReference, ProcedureCode
+from .models import Claim, Icd10Code, NpiReference, ProcedureCode
+
+
+class ServiceLineCaptureForm(forms.Form):
+    """One repeatable CMS-1500 service line in the claim capture workflow."""
+
+    service_line_from_date = forms.DateField(
+        label="Service Line From Date",
+        required=False,
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+    service_line_to_date = forms.DateField(
+        label="Service Line To Date",
+        required=False,
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+    place_of_service = forms.CharField(label="Place of Service", max_length=10, required=False)
+    procedure_code = forms.CharField(
+        label="Procedure Code / CPT / HCPCS",
+        max_length=20,
+        help_text="Validated against the active CPT / HCPCS reference subset.",
+    )
+    modifier_1 = forms.CharField(label="Modifier 1", max_length=10, required=False)
+    modifier_2 = forms.CharField(label="Modifier 2", max_length=10, required=False)
+    modifier_3 = forms.CharField(label="Modifier 3", max_length=10, required=False)
+    modifier_4 = forms.CharField(label="Modifier 4", max_length=10, required=False)
+    diagnosis_pointer_1 = forms.IntegerField(label="Diagnosis Pointer 1", required=False, min_value=1, max_value=4)
+    diagnosis_pointer_2 = forms.IntegerField(label="Diagnosis Pointer 2", required=False, min_value=1, max_value=4)
+    diagnosis_pointer_3 = forms.IntegerField(label="Diagnosis Pointer 3", required=False, min_value=1, max_value=4)
+    diagnosis_pointer_4 = forms.IntegerField(label="Diagnosis Pointer 4", required=False, min_value=1, max_value=4)
+    charge_amount = forms.DecimalField(label="Charge Amount", max_digits=12, decimal_places=2, min_value=0)
+    units = forms.IntegerField(label="Units", min_value=1, initial=1)
+
+    def __init__(self, *args, valid_diagnosis_orders=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.valid_diagnosis_orders = set(valid_diagnosis_orders or [])
+
+    def clean(self):
+        cleaned_data = super().clean()
+
+        line_from_date = cleaned_data.get("service_line_from_date")
+        line_to_date = cleaned_data.get("service_line_to_date")
+        if line_from_date and line_to_date and line_to_date < line_from_date:
+            raise forms.ValidationError("Service line end date cannot be before service line start date.")
+
+        procedure_code = (cleaned_data.get("procedure_code") or "").strip().upper()
+        cleaned_data["procedure_code"] = procedure_code
+        if procedure_code and not ProcedureCode.objects.filter(code=procedure_code, is_active=True).exists():
+            self.add_error(
+                "procedure_code",
+                "Procedure code was not found in the active CPT / HCPCS reference data.",
+            )
+
+        for index in range(1, 5):
+            field_name = f"diagnosis_pointer_{index}"
+            pointer = cleaned_data.get(field_name)
+            if pointer and pointer not in self.valid_diagnosis_orders:
+                self.add_error(
+                    field_name,
+                    "Diagnosis pointer must reference an entered diagnosis code.",
+                )
+
+        return cleaned_data
+
+
+ServiceLineCaptureFormSet = forms.formset_factory(
+    ServiceLineCaptureForm,
+    extra=0,
+    can_delete=True,
+    min_num=1,
+    validate_min=True,
+)
 
 
 class CMS1500CaptureForm(forms.Form):
-    """Single-screen development form for capturing core CMS-1500 claim information.
+    """Claim-level portion of the CMS-1500 capture workflow.
 
-    This form is intentionally practical for the first implementation phase. It captures
-    the major CMS-1500 information groups and will be saved into the normalized claim
-    models in the view layer.
+    Repeatable line-level information is handled by ``ServiceLineCaptureFormSet``.
     """
 
     # Patient information
@@ -177,33 +246,11 @@ class CMS1500CaptureForm(forms.Form):
     diagnosis_code_4 = forms.CharField(label="Diagnosis Code 4", max_length=20, required=False)
     diagnosis_description_4 = forms.CharField(label="Diagnosis Description 4", max_length=255, required=False)
 
-    # Service line information
-    service_line_from_date = forms.DateField(
-        label="Service Line From Date",
-        required=False,
-        widget=forms.DateInput(attrs={"type": "date"}),
-    )
-    service_line_to_date = forms.DateField(
-        label="Service Line To Date",
-        required=False,
-        widget=forms.DateInput(attrs={"type": "date"}),
-    )
-    place_of_service = forms.CharField(label="Place of Service", max_length=10, required=False)
-    procedure_code = forms.CharField(
-        label="Procedure Code / CPT / HCPCS",
-        max_length=20,
-        help_text="Validated against the active CPT / HCPCS reference subset.",
-    )
-    modifier_1 = forms.CharField(label="Modifier 1", max_length=10, required=False)
-    modifier_2 = forms.CharField(label="Modifier 2", max_length=10, required=False)
-    modifier_3 = forms.CharField(label="Modifier 3", max_length=10, required=False)
-    modifier_4 = forms.CharField(label="Modifier 4", max_length=10, required=False)
-    diagnosis_pointer_1 = forms.IntegerField(label="Diagnosis Pointer 1", required=False, min_value=1, max_value=4)
-    diagnosis_pointer_2 = forms.IntegerField(label="Diagnosis Pointer 2", required=False, min_value=1, max_value=4)
-    diagnosis_pointer_3 = forms.IntegerField(label="Diagnosis Pointer 3", required=False, min_value=1, max_value=4)
-    diagnosis_pointer_4 = forms.IntegerField(label="Diagnosis Pointer 4", required=False, min_value=1, max_value=4)
-    charge_amount = forms.DecimalField(label="Charge Amount", max_digits=12, decimal_places=2, min_value=0)
-    units = forms.IntegerField(label="Units", min_value=1, initial=1)
+    def clean_claim_number(self):
+        claim_number = self.cleaned_data["claim_number"].strip()
+        if claim_number and Claim.objects.filter(claim_number=claim_number).exists():
+            raise forms.ValidationError("A claim with this claim number already exists.")
+        return claim_number
 
     def clean(self):
         cleaned_data = super().clean()
@@ -222,11 +269,6 @@ class CMS1500CaptureForm(forms.Form):
         if service_start_date and service_end_date and service_end_date < service_start_date:
             raise forms.ValidationError("Service end date cannot be before service start date.")
 
-        line_from_date = cleaned_data.get("service_line_from_date")
-        line_to_date = cleaned_data.get("service_line_to_date")
-        if line_from_date and line_to_date and line_to_date < line_from_date:
-            raise forms.ValidationError("Service line end date cannot be before service line start date.")
-
         for field_name in ("billing_provider_npi", "rendering_provider_npi"):
             npi = (cleaned_data.get(field_name) or "").strip()
             cleaned_data[field_name] = npi
@@ -238,32 +280,13 @@ class CMS1500CaptureForm(forms.Form):
             if not NpiReference.objects.filter(npi=npi, is_active=True).exists():
                 self.add_error(field_name, "NPI was not found in the active reference data.")
 
-        entered_diagnosis_orders = set()
         for index in range(1, 5):
             field_name = f"diagnosis_code_{index}"
             code = (cleaned_data.get(field_name) or "").strip().upper()
             cleaned_data[field_name] = code
             if not code:
                 continue
-            entered_diagnosis_orders.add(index)
             if not Icd10Code.objects.filter(code=code, is_active=True).exists():
                 self.add_error(field_name, "Diagnosis code was not found in the active ICD-10-CM reference data.")
-
-        procedure_code = (cleaned_data.get("procedure_code") or "").strip().upper()
-        cleaned_data["procedure_code"] = procedure_code
-        if procedure_code and not ProcedureCode.objects.filter(code=procedure_code, is_active=True).exists():
-            self.add_error(
-                "procedure_code",
-                "Procedure code was not found in the active CPT / HCPCS reference data.",
-            )
-
-        for index in range(1, 5):
-            field_name = f"diagnosis_pointer_{index}"
-            pointer = cleaned_data.get(field_name)
-            if pointer and pointer not in entered_diagnosis_orders:
-                self.add_error(
-                    field_name,
-                    "Diagnosis pointer must reference an entered diagnosis code.",
-                )
 
         return cleaned_data

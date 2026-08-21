@@ -18,6 +18,64 @@
         font-size: 18px;
     }
 
+    .service-line-list {
+        display: grid;
+        gap: 16px;
+    }
+
+    .service-line-card {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 16px;
+        background: #f8fafc;
+    }
+
+    .service-line-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+    }
+
+    .service-line-header h4 {
+        margin: 0;
+        color: var(--primary);
+        font-size: 16px;
+    }
+
+    .service-line-error {
+        color: var(--danger);
+        margin: 0 0 12px;
+    }
+
+    .service-line-controls {
+        margin-top: 14px;
+    }
+
+    .add-service-line,
+    .remove-service-line {
+        border: 1px solid var(--primary);
+        border-radius: 6px;
+        background: #ffffff;
+        color: var(--primary);
+        cursor: pointer;
+        font: inherit;
+        font-weight: 600;
+        padding: 8px 12px;
+    }
+
+    .remove-service-line {
+        border-color: var(--danger);
+        color: var(--danger);
+        padding: 6px 10px;
+    }
+
+    .remove-service-line:disabled {
+        cursor: not-allowed;
+        opacity: 0.45;
+    }
+
     .form-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -116,7 +174,7 @@
         Entered NPI, ICD-10-CM, and CPT / HCPCS values are checked against the active development reference subset before the claim is saved.
     </div>
 
-    {% if form.errors %}
+    {% if capture_has_errors %}
         <div class="form-error-summary" role="alert" aria-labelledby="form-error-heading">
             <h3 id="form-error-heading">Review the highlighted claim fields</h3>
             <ul>
@@ -128,12 +186,28 @@
                 {% for error in form.non_field_errors %}
                     <li>{{ error }}</li>
                 {% endfor %}
+                {% for service_line_form in service_line_formset %}
+                    {% with line_number=forloop.counter %}
+                        {% for field in service_line_form.visible_fields %}
+                            {% for error in field.errors %}
+                                <li><a href="#{{ field.id_for_label }}">Service Line {{ line_number }} — {{ field.label }}: {{ error }}</a></li>
+                            {% endfor %}
+                        {% endfor %}
+                        {% for error in service_line_form.non_field_errors %}
+                            <li>Service Line {{ line_number }}: {{ error }}</li>
+                        {% endfor %}
+                    {% endwith %}
+                {% endfor %}
+                {% for error in service_line_formset.non_form_errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
             </ul>
         </div>
     {% endif %}
 
     <form method="post" novalidate>
         {% csrf_token %}
+        {{ service_line_formset.management_form }}
 
         <section class="form-section">
             <h3>Patient Information</h3>
@@ -240,22 +314,18 @@
 
         <section class="form-section">
             <h3>Service Line Information</h3>
-            <div class="form-grid">
-                <div class="form-field">{{ form.service_line_from_date.label_tag }}{{ form.service_line_from_date }}{{ form.service_line_from_date.errors }}</div>
-                <div class="form-field">{{ form.service_line_to_date.label_tag }}{{ form.service_line_to_date }}{{ form.service_line_to_date.errors }}</div>
-                <div class="form-field">{{ form.place_of_service.label_tag }}{{ form.place_of_service }}{{ form.place_of_service.errors }}</div>
-                <div class="form-field">{{ form.procedure_code.label_tag }}{{ form.procedure_code }}{% if form.procedure_code.help_text %}<span class="helptext">{{ form.procedure_code.help_text }}</span>{% endif %}{{ form.procedure_code.errors }}</div>
-                <div class="form-field">{{ form.modifier_1.label_tag }}{{ form.modifier_1 }}{{ form.modifier_1.errors }}</div>
-                <div class="form-field">{{ form.modifier_2.label_tag }}{{ form.modifier_2 }}{{ form.modifier_2.errors }}</div>
-                <div class="form-field">{{ form.modifier_3.label_tag }}{{ form.modifier_3 }}{{ form.modifier_3.errors }}</div>
-                <div class="form-field">{{ form.modifier_4.label_tag }}{{ form.modifier_4 }}{{ form.modifier_4.errors }}</div>
-                <div class="form-field">{{ form.diagnosis_pointer_1.label_tag }}{{ form.diagnosis_pointer_1 }}{{ form.diagnosis_pointer_1.errors }}</div>
-                <div class="form-field">{{ form.diagnosis_pointer_2.label_tag }}{{ form.diagnosis_pointer_2 }}{{ form.diagnosis_pointer_2.errors }}</div>
-                <div class="form-field">{{ form.diagnosis_pointer_3.label_tag }}{{ form.diagnosis_pointer_3 }}{{ form.diagnosis_pointer_3.errors }}</div>
-                <div class="form-field">{{ form.diagnosis_pointer_4.label_tag }}{{ form.diagnosis_pointer_4 }}{{ form.diagnosis_pointer_4.errors }}</div>
-                <div class="form-field">{{ form.charge_amount.label_tag }}{{ form.charge_amount }}{{ form.charge_amount.errors }}</div>
-                <div class="form-field">{{ form.units.label_tag }}{{ form.units }}{{ form.units.errors }}</div>
+            <p class="muted">Add as many service lines as needed. Each line is validated and saved separately.</p>
+            <div id="service-line-forms" class="service-line-list" data-service-line-forms>
+                {% for service_line_form in service_line_formset %}
+                    {% include "claims/_service_line_form.html" with line_form=service_line_form line_number=forloop.counter only %}
+                {% endfor %}
             </div>
+            <div class="service-line-controls">
+                <button type="button" id="add-service-line" class="add-service-line">Add Service Line</button>
+            </div>
+            <template id="empty-service-line-form">
+                {% include "claims/_service_line_form.html" with line_form=service_line_formset.empty_form line_number="" only %}
+            </template>
         </section>
 
         <div class="form-actions">
@@ -264,4 +334,50 @@
         </div>
     </form>
 </div>
+
+<script>
+    (() => {
+        const container = document.getElementById("service-line-forms");
+        const addButton = document.getElementById("add-service-line");
+        const emptyFormTemplate = document.getElementById("empty-service-line-form");
+        const totalForms = document.getElementById("id_service_lines-TOTAL_FORMS");
+
+        if (!container || !addButton || !emptyFormTemplate || !totalForms) {
+            return;
+        }
+
+        const visibleServiceLines = () =>
+            Array.from(container.querySelectorAll("[data-service-line-form]")).filter((line) => !line.hidden);
+
+        const refreshServiceLines = () => {
+            const visibleLines = visibleServiceLines();
+            visibleLines.forEach((line, index) => {
+                line.querySelector("[data-service-line-number]").textContent = index + 1;
+                line.querySelector("[data-remove-service-line]").disabled = visibleLines.length === 1;
+            });
+        };
+
+        addButton.addEventListener("click", () => {
+            const formIndex = Number.parseInt(totalForms.value, 10);
+            const formHtml = emptyFormTemplate.innerHTML.replaceAll("__prefix__", String(formIndex));
+            container.insertAdjacentHTML("beforeend", formHtml);
+            totalForms.value = formIndex + 1;
+            refreshServiceLines();
+        });
+
+        container.addEventListener("click", (event) => {
+            const removeButton = event.target.closest("[data-remove-service-line]");
+            if (!removeButton || visibleServiceLines().length === 1) {
+                return;
+            }
+
+            const serviceLine = removeButton.closest("[data-service-line-form]");
+            serviceLine.querySelector('input[name$="-DELETE"]').value = "on";
+            serviceLine.hidden = true;
+            refreshServiceLines();
+        });
+
+        refreshServiceLines();
+    })();
+</script>
 {% endblock %}

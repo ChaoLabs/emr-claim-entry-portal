@@ -120,7 +120,10 @@ erDiagram
         string procedure_reference_id FK
         date service_dates
         string place_of_service
-        string modifiers
+        string modifier_1
+        string modifier_2
+        string modifier_3
+        string modifier_4
         int diagnosis_pointers
         decimal charge_amount
         int units

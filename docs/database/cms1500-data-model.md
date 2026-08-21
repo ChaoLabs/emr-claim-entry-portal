@@ -21,7 +21,7 @@ The final model contains the 11 operational tables already justified by claim ca
 | Provider | `providers` | Claim-time billing, rendering, referring, or facility provider data. |
 | Provider | `claim_providers` | Assigns a provider role to a claim. |
 | Coding | `claim_diagnoses` | Ordered claim diagnoses and their captured code snapshots. |
-| Coding | `service_lines` | Dates, POS, procedure snapshot, modifiers, diagnosis pointers, charge, units, and rendering provider. |
+| Coding | `service_lines` | Dates, POS, procedure snapshot, four optional string modifiers (`modifier_1` through `modifier_4`), diagnosis pointers, charge, units, and rendering provider. |
 | Audit | `claim_audit_events` | Append-style record of workflow events. |
 | Reference | `npi_references` | Minimal NPPES-derived NPI validation record. |
 | Reference | `icd10_codes` | Version-aware ICD-10-CM code and description. |

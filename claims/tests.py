@@ -215,10 +215,21 @@ class ClaimCaptureWorkflowTests(TestCase):
         self.assertEqual(claim.diagnoses.count(), 1)
         self.assertEqual(claim.diagnoses.get().icd10_reference, self.headache)
         self.assertEqual(claim.service_lines.count(), 1)
-        self.assertEqual(claim.service_lines.get().procedure_reference, self.office_visit)
+        service_line = claim.service_lines.get()
+        self.assertEqual(service_line.procedure_reference, self.office_visit)
+        self.assertEqual(service_line.modifier_1, "25")
+        self.assertEqual(service_line.modifier_2, "GT")
+        self.assertEqual(service_line.modifier_3, "59")
+        self.assertEqual(service_line.modifier_4, "KX")
         self.assertEqual(claim.claim_providers.count(), 1)
         self.assertEqual(claim.claim_providers.get().provider.npi_reference, self.npi_reference)
         self.assertEqual(claim.audit_events.count(), 1)
+
+        detail_response = self.client.get(reverse("claims:claim_detail", args=[claim.id]))
+        self.assertContains(detail_response, "25")
+        self.assertContains(detail_response, "GT")
+        self.assertContains(detail_response, "59")
+        self.assertContains(detail_response, "KX")
 
     def test_capture_rejects_codes_not_in_active_reference_data(self):
         payload = self._capture_payload()
@@ -316,10 +327,10 @@ class ClaimCaptureWorkflowTests(TestCase):
                 "service_line_to_date": "",
                 "place_of_service": "11",
                 "procedure_code": "99213",
-                "modifier_1": "",
-                "modifier_2": "",
-                "modifier_3": "",
-                "modifier_4": "",
+                "modifier_1": "25",
+                "modifier_2": "GT",
+                "modifier_3": "59",
+                "modifier_4": "KX",
                 "diagnosis_pointer_1": "1",
                 "diagnosis_pointer_2": "",
                 "diagnosis_pointer_3": "",

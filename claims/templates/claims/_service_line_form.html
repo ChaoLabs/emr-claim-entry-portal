@@ -1,0 +1,28 @@
+<article class="service-line-card" data-service-line-form {% if line_form.DELETE.value %}hidden{% endif %}>
+    {{ line_form.DELETE.as_hidden }}
+    <div class="service-line-header">
+        <h4>Service Line <span data-service-line-number>{{ line_number }}</span></h4>
+        <button type="button" class="remove-service-line" data-remove-service-line>Remove</button>
+    </div>
+
+    {% for error in line_form.non_field_errors %}
+        <p class="service-line-error">{{ error }}</p>
+    {% endfor %}
+
+    <div class="form-grid">
+        <div class="form-field">{{ line_form.service_line_from_date.label_tag }}{{ line_form.service_line_from_date }}{{ line_form.service_line_from_date.errors }}</div>
+        <div class="form-field">{{ line_form.service_line_to_date.label_tag }}{{ line_form.service_line_to_date }}{{ line_form.service_line_to_date.errors }}</div>
+        <div class="form-field">{{ line_form.place_of_service.label_tag }}{{ line_form.place_of_service }}{{ line_form.place_of_service.errors }}</div>
+        <div class="form-field">{{ line_form.procedure_code.label_tag }}{{ line_form.procedure_code }}{% if line_form.procedure_code.help_text %}<span class="helptext">{{ line_form.procedure_code.help_text }}</span>{% endif %}{{ line_form.procedure_code.errors }}</div>
+        <div class="form-field">{{ line_form.modifier_1.label_tag }}{{ line_form.modifier_1 }}{{ line_form.modifier_1.errors }}</div>
+        <div class="form-field">{{ line_form.modifier_2.label_tag }}{{ line_form.modifier_2 }}{{ line_form.modifier_2.errors }}</div>
+        <div class="form-field">{{ line_form.modifier_3.label_tag }}{{ line_form.modifier_3 }}{{ line_form.modifier_3.errors }}</div>
+        <div class="form-field">{{ line_form.modifier_4.label_tag }}{{ line_form.modifier_4 }}{{ line_form.modifier_4.errors }}</div>
+        <div class="form-field">{{ line_form.diagnosis_pointer_1.label_tag }}{{ line_form.diagnosis_pointer_1 }}{{ line_form.diagnosis_pointer_1.errors }}</div>
+        <div class="form-field">{{ line_form.diagnosis_pointer_2.label_tag }}{{ line_form.diagnosis_pointer_2 }}{{ line_form.diagnosis_pointer_2.errors }}</div>
+        <div class="form-field">{{ line_form.diagnosis_pointer_3.label_tag }}{{ line_form.diagnosis_pointer_3 }}{{ line_form.diagnosis_pointer_3.errors }}</div>
+        <div class="form-field">{{ line_form.diagnosis_pointer_4.label_tag }}{{ line_form.diagnosis_pointer_4 }}{{ line_form.diagnosis_pointer_4.errors }}</div>
+        <div class="form-field">{{ line_form.charge_amount.label_tag }}{{ line_form.charge_amount }}{{ line_form.charge_amount.errors }}</div>
+        <div class="form-field">{{ line_form.units.label_tag }}{{ line_form.units }}{{ line_form.units.errors }}</div>
+    </div>
+</article>

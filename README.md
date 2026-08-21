@@ -6,7 +6,7 @@ A Django development application for capturing, validating, reviewing, and persi
 
 The application currently includes:
 
-- a CMS-1500-oriented claim-entry form;
+- a CMS-1500-oriented claim-entry form with dynamically repeatable service lines;
 - normalized patient, subscriber, payer, policy, coverage, provider, diagnosis, and service-line persistence;
 - NPI, ICD-10-CM, and CPT / HCPCS reference validation;
 - reference source/version/update metadata visible on the dashboard;
@@ -45,7 +45,7 @@ uv run python manage.py check
 uv run python manage.py test claims
 ```
 
-The workflow tests cover dashboard/detail rendering, successful reference-linked claim capture, rejection of unknown reference values, and validation of CMS-1500 diagnosis pointers.
+The workflow tests cover dashboard/detail rendering, dynamic capture of more than six service lines, charge aggregation, successful reference-linked claim capture, rejection of unknown reference values, and validation of CMS-1500 diagnosis pointers.
 
 ## Database documentation
 

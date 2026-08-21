@@ -21,7 +21,7 @@ The final model contains the 11 operational tables already justified by claim ca
 | Provider | `providers` | Claim-time billing, rendering, referring, or facility provider data. |
 | Provider | `claim_providers` | Assigns a provider role to a claim. |
 | Coding | `claim_diagnoses` | Ordered claim diagnoses and their captured code snapshots. |
-| Coding | `service_lines` | Dates, POS, procedure snapshot, four optional string modifiers (`modifier_1` through `modifier_4`), diagnosis pointers, charge, units, and rendering provider. |
+| Coding | `service_lines` | Repeatable claim lines with dates, POS, procedure snapshot, four optional string modifiers (`modifier_1` through `modifier_4`), diagnosis pointers, charge, units, and rendering provider. |
 | Audit | `claim_audit_events` | Append-style record of workflow events. |
 | Reference | `npi_references` | Minimal NPPES-derived NPI validation record. |
 | Reference | `icd10_codes` | Version-aware ICD-10-CM code and description. |
@@ -67,6 +67,7 @@ Expected source cadence is not hard-coded in the schema: NPPES publishes downloa
 
 ## CMS-1500-specific relationships
 
+- A claim owns any number of `service_lines`. The web form adds and removes line forms dynamically and does not apply the paper form's six-line layout limit.
 - `service_lines.rendering_provider_id` supports the line-level rendering provider represented by Item 24J.
 - `diagnosis_pointer_1` through `diagnosis_pointer_4` support the bounded Item 24E references. Form validation prevents a pointer from targeting an empty diagnosis position.
 - `claim_providers.provider_role` supports billing, rendering, referring, and facility roles without duplicating provider columns on `claims`.

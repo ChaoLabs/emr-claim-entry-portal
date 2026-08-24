@@ -24,9 +24,13 @@ The documented reference relationships provide stable inputs for production data
 - `uv` for dependency and command execution
 - Mermaid for GitHub-rendered ERD documentation
 
-## Run locally
+## Install and run locally
+
+With Git and `uv` installed, run:
 
 ```bash
+git clone https://github.com/ChaoLabs/emr-claim-entry-portal.git
+cd emr-claim-entry-portal
 uv sync
 uv run python manage.py migrate
 uv run python manage.py seed_sample_claims

@@ -51,6 +51,12 @@ erDiagram
         string payer_type
         string payer_identifier
         string mac
+        string address_line_1
+        string address_line_2
+        string city
+        string state
+        string zip_code
+        string zip_code_extension
     }
 
     INSURANCE_POLICIES {

@@ -138,7 +138,23 @@ class Command(BaseCommand):
                     payer_type=Payer.PAYER_TYPE_MEDICARE,
                     payer_identifier="CMS-DEMO",
                     medicare_administrative_contractor="Demo MAC",
+                    address_line_1="7500 Demo Payer Drive",
+                    city="Baltimore",
+                    state="MD",
+                    zip_code="21244",
+                    zip_code_extension="1850",
                 )
+            else:
+                payer.payer_name = "Medicare"
+                payer.payer_type = Payer.PAYER_TYPE_MEDICARE
+                payer.medicare_administrative_contractor = "Demo MAC"
+                payer.address_line_1 = "7500 Demo Payer Drive"
+                payer.address_line_2 = ""
+                payer.city = "Baltimore"
+                payer.state = "MD"
+                payer.zip_code = "21244"
+                payer.zip_code_extension = "1850"
+                payer.save()
 
             insurance_policy = InsurancePolicy.objects.filter(
                 insured_party=insured,
@@ -221,6 +237,11 @@ class Command(BaseCommand):
             payer_type=Payer.PAYER_TYPE_MEDICARE,
             payer_identifier="CMS-DEMO",
             medicare_administrative_contractor="Demo MAC",
+            address_line_1="7500 Demo Payer Drive",
+            city="Baltimore",
+            state="MD",
+            zip_code="21244",
+            zip_code_extension="1850",
         )
 
         billing_provider = Provider.objects.create(

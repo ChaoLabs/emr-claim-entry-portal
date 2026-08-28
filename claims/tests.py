@@ -103,6 +103,11 @@ class ClaimCaptureWorkflowTests(TestCase):
             payer_name="Medicare",
             payer_type=Payer.PAYER_TYPE_MEDICARE,
             payer_identifier="CMS-DEMO",
+            address_line_1="300 Demo Payer Road",
+            city="Durham",
+            state="NC",
+            zip_code="27701",
+            zip_code_extension="1234",
         )
         self.insurance_policy = InsurancePolicy.objects.create(
             insured_party=self.insured,
@@ -184,6 +189,8 @@ class ClaimCaptureWorkflowTests(TestCase):
         self.assertContains(response, "Medicare")
         self.assertContains(response, "DEMO-MBI-0001")
         self.assertContains(response, "Demo Medicare Professional Coverage")
+        self.assertContains(response, "300 Demo Payer Road")
+        self.assertContains(response, "27701-1234")
         self.assertContains(response, "EMRTS Demo Clinic")
         self.assertContains(response, "M54.50")
         self.assertContains(response, "99213")
@@ -217,7 +224,14 @@ class ClaimCaptureWorkflowTests(TestCase):
         self.assertTrue(coverage.assignment_of_benefits)
         self.assertTrue(coverage.release_of_information)
         self.assertEqual(coverage.prior_authorization_number, "AUTH-123")
-        self.assertEqual(coverage.insurance_policy.payer.payer_name, "Medicare")
+        payer = coverage.insurance_policy.payer
+        self.assertEqual(payer.payer_name, "Medicare")
+        self.assertEqual(payer.address_line_1, "300 Demo Payer Road")
+        self.assertEqual(payer.address_line_2, "Suite 400")
+        self.assertEqual(payer.city, "Durham")
+        self.assertEqual(payer.state, "NC")
+        self.assertEqual(payer.zip_code, "27701")
+        self.assertEqual(payer.zip_code_extension, "1234")
         self.assertEqual(coverage.insurance_policy.member_id, "TEST-MBI-0002")
         self.assertEqual(coverage.insurance_policy.group_number, "TEST-GROUP")
         self.assertEqual(coverage.insurance_policy.plan_name, "Test Medicare Plan")
@@ -240,6 +254,8 @@ class ClaimCaptureWorkflowTests(TestCase):
         self.assertContains(detail_response, "GT")
         self.assertContains(detail_response, "59")
         self.assertContains(detail_response, "KX")
+        self.assertContains(detail_response, "300 Demo Payer Road")
+        self.assertContains(detail_response, "27701-1234")
 
     def test_capture_claim_accepts_more_than_six_service_lines_and_sums_charges(self):
         payload = self._capture_payload()
@@ -326,6 +342,45 @@ class ClaimCaptureWorkflowTests(TestCase):
         self.assertContains(response, "Diagnosis pointer must reference an entered diagnosis code")
         self.assertFalse(Claim.objects.filter(claim_number="CLM-TEST-POST-001").exists())
 
+    def test_capture_requires_valid_payer_mailing_address(self):
+        payload = self._capture_payload()
+        payload["payer_address_line_1"] = ""
+        payload["payer_city"] = ""
+        payload["payer_state"] = "N"
+        payload["payer_zip_code"] = "2770A"
+        payload["payer_zip_code_extension"] = "12A4"
+
+        response = self.client.post(reverse("claims:capture_claim"), data=payload)
+
+        self.assertEqual(response.status_code, 200)
+        form = response.context["form"]
+        self.assertEqual(form.errors["payer_address_line_1"], ["This field is required."])
+        self.assertEqual(form.errors["payer_city"], ["This field is required."])
+        self.assertEqual(form.errors["payer_state"], ["State must be a two-letter code."])
+        self.assertEqual(
+            form.errors["payer_zip_code"],
+            ["Payer ZIP code must contain exactly 5 digits."],
+        )
+        self.assertEqual(
+            form.errors["payer_zip_code_extension"],
+            ["Payer ZIP+4 extension must contain exactly 4 digits."],
+        )
+        self.assertFalse(Claim.objects.filter(claim_number="CLM-TEST-POST-001").exists())
+
+    def test_capture_accepts_payer_zip_without_optional_extension(self):
+        payload = self._capture_payload()
+        payload["claim_number"] = "CLM-TEST-ZIP5-001"
+        payload["payer_zip_code_extension"] = ""
+
+        response = self.client.post(reverse("claims:capture_claim"), data=payload)
+
+        self.assertEqual(response.status_code, 302)
+        claim = Claim.objects.get(claim_number="CLM-TEST-ZIP5-001")
+        coverage = claim.coverages.select_related("insurance_policy__payer").get()
+        payer = coverage.insurance_policy.payer
+        self.assertEqual(payer.zip_code, "27701")
+        self.assertEqual(payer.zip_code_extension, "")
+
     def test_sample_seed_is_idempotent_and_repairs_demo_coverage(self):
         call_command("seed_sample_claims", verbosity=0)
         call_command("seed_sample_claims", verbosity=0)
@@ -371,6 +426,12 @@ class ClaimCaptureWorkflowTests(TestCase):
                 "payer_type": "medicare",
                 "payer_identifier": "",
                 "medicare_administrative_contractor": "",
+                "payer_address_line_1": "300 Demo Payer Road",
+                "payer_address_line_2": "Suite 400",
+                "payer_city": "Durham",
+                "payer_state": "nc",
+                "payer_zip_code": "27701",
+                "payer_zip_code_extension": "1234",
                 "billing_provider_name": "EMRTS Test Clinic",
                 "billing_provider_npi": "1234567893",
                 "billing_provider_taxonomy_code": "207Q00000X",

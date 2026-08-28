@@ -14,7 +14,7 @@ The final model contains the 11 operational tables already justified by claim ca
 |---|---|---|
 | Party | `patients` | Person receiving the service. |
 | Party | `insured_parties` | Subscriber or insured person; may differ from the patient. |
-| Coverage | `payers` | Reusable insurance-company / payer identity. |
+| Coverage | `payers` | Reusable insurance-company / payer identity and mailing address. |
 | Coverage | `insurance_policies` | Connects an insured party to a payer with member, group, plan, dates, and status. |
 | Claim | `claims` | Aggregate root for CMS-1500 capture and review. |
 | Claim | `claim_coverages` | Applies one or more policies to a claim by payer sequence. |
@@ -36,6 +36,8 @@ Claim -> ClaimCoverage -> InsurancePolicy
 ```
 
 Member ID and group number describe a policy, not a person. Payer sequence and relationship to patient describe how that policy is used on a particular claim. Separating those facts avoids duplication and supports multiple coverages without adding payer-specific columns to `claims`.
+
+Payer mailing addresses store address lines, city, state, a required five-digit ZIP code, and an optional four-digit ZIP extension. Keeping the ZIP components separate preserves the required base code while supporting ZIP+4 without making the extension mandatory.
 
 ## Snapshot plus reference pattern
 

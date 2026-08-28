@@ -180,6 +180,12 @@ def _save_capture_form(data, service_line_data):
         payer_type=data["payer_type"],
         payer_identifier=data.get("payer_identifier", ""),
         medicare_administrative_contractor=data.get("medicare_administrative_contractor", ""),
+        address_line_1=data["payer_address_line_1"],
+        address_line_2=data.get("payer_address_line_2", ""),
+        city=data["payer_city"],
+        state=data["payer_state"],
+        zip_code=data["payer_zip_code"],
+        zip_code_extension=data.get("payer_zip_code_extension", ""),
     )
 
     billing_npi = data.get("billing_provider_npi", "")

@@ -1,6 +1,14 @@
 from django import forms
 
-from .models import Claim, Icd10Code, NpiReference, ProcedureCode
+from .models import (
+    Claim,
+    Icd10Code,
+    NpiReference,
+    PAYER_STATE_CODE_VALIDATOR,
+    PAYER_ZIP_CODE_EXTENSION_VALIDATOR,
+    PAYER_ZIP_CODE_VALIDATOR,
+    ProcedureCode,
+)
 
 
 class ServiceLineCaptureForm(forms.Form):
@@ -178,6 +186,33 @@ class CMS1500CaptureForm(forms.Form):
         max_length=255,
         required=False,
     )
+    payer_address_line_1 = forms.CharField(label="Payer Address Line 1", max_length=255)
+    payer_address_line_2 = forms.CharField(
+        label="Payer Address Line 2",
+        max_length=255,
+        required=False,
+    )
+    payer_city = forms.CharField(label="Payer City", max_length=100)
+    payer_state = forms.CharField(
+        label="Payer State",
+        max_length=2,
+        validators=[PAYER_STATE_CODE_VALIDATOR],
+    )
+    payer_zip_code = forms.CharField(
+        label="Payer ZIP Code (5 digits)",
+        min_length=5,
+        max_length=5,
+        validators=[PAYER_ZIP_CODE_VALIDATOR],
+        widget=forms.TextInput(attrs={"inputmode": "numeric"}),
+    )
+    payer_zip_code_extension = forms.CharField(
+        label="Payer ZIP+4 Extension (4 digits)",
+        min_length=4,
+        max_length=4,
+        required=False,
+        validators=[PAYER_ZIP_CODE_EXTENSION_VALIDATOR],
+        widget=forms.TextInput(attrs={"inputmode": "numeric"}),
+    )
 
     # Provider information
     billing_provider_name = forms.CharField(label="Billing Provider / Organization Name", max_length=255)
@@ -251,6 +286,9 @@ class CMS1500CaptureForm(forms.Form):
         if claim_number and Claim.objects.filter(claim_number=claim_number).exists():
             raise forms.ValidationError("A claim with this claim number already exists.")
         return claim_number
+
+    def clean_payer_state(self):
+        return self.cleaned_data["payer_state"].upper()
 
     def clean(self):
         cleaned_data = super().clean()

@@ -155,6 +155,7 @@
                         <th>Insured / Subscriber</th>
                         <th>Relationship</th>
                         <th>Payer</th>
+                        <th>Payer Mailing Address</th>
                         <th>Policy Type</th>
                         <th>Member ID</th>
                         <th>Group Number</th>
@@ -169,6 +170,12 @@
                             <td>{{ coverage.insurance_policy.insured_party }}</td>
                             <td>{{ coverage.relationship_to_patient|default:"-" }}</td>
                             <td>{{ coverage.insurance_policy.payer.payer_name }}</td>
+                            <td>
+                                {{ coverage.insurance_policy.payer.address_line_1|default:"-" }}
+                                {% if coverage.insurance_policy.payer.address_line_2 %}<br>{{ coverage.insurance_policy.payer.address_line_2 }}{% endif %}
+                                <br>{{ coverage.insurance_policy.payer.city|default:"" }}{% if coverage.insurance_policy.payer.city and coverage.insurance_policy.payer.state %}, {% endif %}{{ coverage.insurance_policy.payer.state|default:"" }}
+                                {{ coverage.insurance_policy.payer.zip_code|default:"" }}{% if coverage.insurance_policy.payer.zip_code_extension %}-{{ coverage.insurance_policy.payer.zip_code_extension }}{% endif %}
+                            </td>
                             <td>{{ coverage.insurance_policy.get_policy_type_display }}</td>
                             <td>{{ coverage.insurance_policy.member_id|default:"-" }}</td>
                             <td>{{ coverage.insurance_policy.group_number|default:"-" }}</td>

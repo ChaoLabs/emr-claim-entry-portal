@@ -41,6 +41,12 @@ CREATE TABLE payers (
     payer_type VARCHAR(50) NOT NULL,
     payer_identifier VARCHAR(100),
     medicare_administrative_contractor VARCHAR(255),
+    address_line_1 VARCHAR(255) NOT NULL,
+    address_line_2 VARCHAR(255),
+    city VARCHAR(100) NOT NULL,
+    state VARCHAR(2) NOT NULL,
+    zip_code VARCHAR(5) NOT NULL,
+    zip_code_extension VARCHAR(4),
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL
 );

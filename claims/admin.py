@@ -104,9 +104,26 @@ class InsuredPartyAdmin(admin.ModelAdmin):
 
 @admin.register(Payer)
 class PayerAdmin(admin.ModelAdmin):
-    list_display = ("payer_name", "payer_type", "payer_identifier", "medicare_administrative_contractor")
-    search_fields = ("payer_name", "payer_identifier", "medicare_administrative_contractor")
-    list_filter = ("payer_type",)
+    list_display = (
+        "payer_name",
+        "payer_type",
+        "payer_identifier",
+        "city",
+        "state",
+        "medicare_administrative_contractor",
+    )
+    search_fields = (
+        "payer_name",
+        "payer_identifier",
+        "medicare_administrative_contractor",
+        "address_line_1",
+        "address_line_2",
+        "city",
+        "state",
+        "zip_code",
+        "zip_code_extension",
+    )
+    list_filter = ("payer_type", "state")
     ordering = ("payer_name",)
 
 

@@ -1,6 +1,21 @@
 import uuid
 
+from django.core.validators import RegexValidator
 from django.db import models
+
+
+PAYER_STATE_CODE_VALIDATOR = RegexValidator(
+    regex=r"^[A-Za-z]{2}$",
+    message="State must be a two-letter code.",
+)
+PAYER_ZIP_CODE_VALIDATOR = RegexValidator(
+    regex=r"^[0-9]{5}$",
+    message="Payer ZIP code must contain exactly 5 digits.",
+)
+PAYER_ZIP_CODE_EXTENSION_VALIDATOR = RegexValidator(
+    regex=r"^[0-9]{4}$",
+    message="Payer ZIP+4 extension must contain exactly 4 digits.",
+)
 
 
 class TimeStampedModel(models.Model):
@@ -237,6 +252,16 @@ class Payer(TimeStampedModel):
     payer_type = models.CharField(max_length=50, choices=PAYER_TYPE_CHOICES, default=PAYER_TYPE_MEDICARE)
     payer_identifier = models.CharField(max_length=100, blank=True)
     medicare_administrative_contractor = models.CharField(max_length=255, blank=True)
+    address_line_1 = models.CharField(max_length=255)
+    address_line_2 = models.CharField(max_length=255, blank=True)
+    city = models.CharField(max_length=100)
+    state = models.CharField(max_length=2, validators=[PAYER_STATE_CODE_VALIDATOR])
+    zip_code = models.CharField(max_length=5, validators=[PAYER_ZIP_CODE_VALIDATOR])
+    zip_code_extension = models.CharField(
+        max_length=4,
+        blank=True,
+        validators=[PAYER_ZIP_CODE_EXTENSION_VALIDATOR],
+    )
 
     class Meta:
         ordering = ["payer_name"]

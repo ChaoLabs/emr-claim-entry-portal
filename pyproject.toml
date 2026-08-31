@@ -18,3 +18,6 @@ dev = [
 
 [tool.uv]
 package = false
+
+[tool.vercel.scripts]
+build = 'if [ -n "$DATABASE_URL" ]; then python manage.py migrate --noinput && python manage.py seed_sample_claims; else echo "DATABASE_URL is required for Vercel deployments." >&2; exit 1; fi'

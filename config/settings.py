@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import os
+import urllib.parse
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -31,6 +32,10 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-development-only")
 DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() in {"1", "true", "yes", "on"}
 
 ALLOWED_HOSTS = [host.strip() for host in os.getenv("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",") if host.strip()]
+
+if os.getenv("VERCEL"):
+    ALLOWED_HOSTS.append(".vercel.app")
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 
 # Application definition
@@ -78,16 +83,35 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    "default": {
-        "ENGINE": os.getenv("DB_ENGINE", "django.db.backends.sqlite3"),
-        "NAME": os.getenv("DB_NAME", BASE_DIR / "db.sqlite3"),
-        "USER": os.getenv("DB_USER", ""),
-        "PASSWORD": os.getenv("DB_PASSWORD", ""),
-        "HOST": os.getenv("DB_HOST", ""),
-        "PORT": os.getenv("DB_PORT", ""),
+if os.getenv("DATABASE_URL"):
+    database_url = urllib.parse.urlparse(os.environ["DATABASE_URL"])
+    database_options = {
+        key: values[-1]
+        for key, values in urllib.parse.parse_qs(database_url.query).items()
+        if key in {"channel_binding", "sslmode"} and values
     }
-}
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": urllib.parse.unquote(database_url.path.lstrip("/")),
+            "USER": urllib.parse.unquote(database_url.username or ""),
+            "PASSWORD": urllib.parse.unquote(database_url.password or ""),
+            "HOST": database_url.hostname or "",
+            "PORT": database_url.port or "",
+            "OPTIONS": database_options,
+        }
+    }
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": os.getenv("DB_ENGINE", "django.db.backends.sqlite3"),
+            "NAME": os.getenv("DB_NAME", BASE_DIR / "db.sqlite3"),
+            "USER": os.getenv("DB_USER", ""),
+            "PASSWORD": os.getenv("DB_PASSWORD", ""),
+            "HOST": os.getenv("DB_HOST", ""),
+            "PORT": os.getenv("DB_PORT", ""),
+        }
+    }
 
 
 # Password validation
@@ -124,7 +148,8 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

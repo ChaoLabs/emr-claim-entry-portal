@@ -41,6 +41,25 @@ Open `http://127.0.0.1:8000/`.
 
 All seeded names, identifiers, and claims are fictional development data. Do not enter real PHI.
 
+## Deploy to Vercel
+
+Vercel deployment is optional and does not change the local SQLite workflow above. The deployed application uses PostgreSQL whenever `DATABASE_URL` is present.
+
+1. Import this GitHub repository into Vercel.
+2. Add a PostgreSQL integration such as Neon and connect it to the project so that Vercel provides `DATABASE_URL`.
+3. Add `DJANGO_SECRET_KEY` with a newly generated secret and set `DJANGO_DEBUG=False` for Production and Preview.
+4. Deploy the project. Vercel detects `config/wsgi.py`; the build script applies migrations and loads the idempotent fictional demo seed.
+
+Generate a secret locally with:
+
+```bash
+uv run python -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())'
+```
+
+Vercel `*.vercel.app` hosts are allowed automatically. If you add a custom domain, include it in `DJANGO_ALLOWED_HOSTS`. Use an isolated or branched PostgreSQL database for Preview deployments so their migrations and demo data do not affect Production.
+
+The hosted instance remains a development demonstration. Do not enter real PHI or production credentials into claim fields.
+
 ## Verify
 
 ```bash

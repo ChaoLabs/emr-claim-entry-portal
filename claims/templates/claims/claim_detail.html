@@ -133,6 +133,23 @@
     </div>
 
     <div class="detail-section">
+        <h3>837P Export Readiness</h3>
+        <p>Prototype checks for 005010X222A1. Passing these checks is not payer acceptance
+            or a complete X12 compliance check.</p>
+        {% if edi_issues %}
+            <p class="status-pill reference-unmatched">Corrections needed before export</p>
+            <ul>
+                {% for issue in edi_issues %}<li>{{ issue }}</li>{% endfor %}
+            </ul>
+        {% else %}
+            <p class="status-pill reference-match">Prototype checks passed</p>
+        {% endif %}
+        <p class="muted">File generation is currently available through the
+            <code>generate_837p</code> management command. This page does not generate,
+            transmit, adjudicate, or receive an 835 response. Use fictional data only.</p>
+    </div>
+
+    <div class="detail-section">
         <h3>Patient Information</h3>
         <div class="detail-grid">
             <div class="field-row"><span class="field-label">Name:</span>{{ claim.patient }}</div>

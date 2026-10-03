@@ -5,6 +5,7 @@ from django.contrib import messages
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from edi import context as edi_context, validators as edi_validators
 
 from .forms import CMS1500CaptureForm, ServiceLineCaptureFormSet
 from .models import (
@@ -89,7 +90,10 @@ def claim_detail(request, claim_id):
         ),
         id=claim_id,
     )
-    return render(request, "claims/claim_detail.html", {"claim": claim})
+    return render(request, "claims/claim_detail.html", {
+        "claim": claim,
+        "edi_issues": edi_validators.validate(edi_context.build(claim)),
+    })
 
 
 def capture_claim(request):

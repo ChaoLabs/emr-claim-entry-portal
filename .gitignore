@@ -28,3 +28,12 @@ staticfiles/
 *.pdf
 *.docx
 *.xlsx
+
+# EDI exports / local transfer material may contain sensitive claim data.
+*.edi
+claims_837p_export*.csv
+outbox/
+inbox/
+transfer-logs/
+*.pem
+*.key

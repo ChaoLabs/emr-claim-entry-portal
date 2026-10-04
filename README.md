@@ -64,7 +64,7 @@ The hosted instance remains a development demonstration. Do not enter real PHI o
 
 The `edi` app is an experimental exporter for saved claims, integrated from [kzzz12138/cms1500-to-837p-converter](https://github.com/kzzz12138/cms1500-to-837p-converter) at commit `6c429a78e50cb5db36e14ed038a79615d37d0576`. See [integration notes](docs/edi-integration.md) for local corrections and limitations.
 
-It generates an X12-shaped 837P test file, not a certified payer-ready transaction. The file uses version `005010X222A1`. The app only writes the file to your computer. It does not send anything to a payer or a clearinghouse. Claim Detail now shows read-only **837P Export Readiness** checks. No web download, SCP worker, API adjudication, or 835 return has been implemented yet.
+It generates an X12-shaped 837P test file, not a certified payer-ready transaction. The file uses version `005010X222A1`. Generation writes a local file; it does not send anything to a payer or a clearinghouse. Claim Detail shows read-only **837P Export Readiness** checks. The separate `tools/transfer_edi.py` CLI can transfer a generated file between approved servers using SCP, checksum verification, durable receipts, and metadata-only audit logs. It is manually invoked; no scheduled worker, web download, API adjudication, or 835 return is implemented.
 
 ### Try it locally
 
@@ -192,6 +192,7 @@ The workflow tests cover dashboard/detail rendering, dynamic capture of more tha
 
 - [EDI export ERD](docs/database/edi-erd.md)
 - [Janus/Vesta phased workflow](docs/server-workflow.md)
+- [SCP transfer setup, commands, and recovery](docs/server-transfer.md)
 - [Final CMS-1500 ERD](docs/database/cms1500-erd.md)
 - [Data model and design rationale](docs/database/cms1500-data-model.md)
 - [PostgreSQL-oriented schema](docs/database/schema.sql)

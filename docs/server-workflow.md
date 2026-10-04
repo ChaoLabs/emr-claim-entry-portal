@@ -1,7 +1,8 @@
 # Janus → Vesta claims POC: staged operational plan
 
-This is a runbook and a list of unresolved contracts, not an installed transfer
-service. No server credentials, private keys, clinical payloads or actual server
+This is a runbook and a list of unresolved contracts. The manually invoked SCP
+transport is implemented; there is no installed background service. No server
+credentials, private keys, clinical payloads or actual server
 addresses belong in this public repository.
 
 ## Responsibilities and boundaries
@@ -12,7 +13,7 @@ addresses belong in this public repository.
 | 837P generation and batch metadata | Chao / Janus candidate | Integrated CLI prototype |
 | Read-only export checks | Portal / Vercel | Included in this integration |
 | FHIR member/provider import into PostgreSQL | Tim / Janus | External work; interface not verified |
-| SCP transfer and transfer audit trail | Chao / Janus and Vesta | Next implementation phase |
+| SCP transfer and transfer audit trail | Chao / Janus and Vesta | CLI implemented; verify on the actual servers using the transfer runbook |
 | Per-claim Rust API adjudication and 835 | Tim / Vesta | Endpoint/schema/auth not supplied |
 | Sample files and operational requirements | Verbus | Await confirmed paths and synthetic samples |
 
@@ -52,7 +53,7 @@ deletions or service restarts are part of this inspection step.
 Treat the supplied version list as reported information, not verified access.
 The meeting's Ubuntu version and the later email differ; check the actual host.
 
-## 2. Confirm the contract before implementing live transfer
+## 2. Confirm the production contract before live integration
 
 Record these decisions with Verbus and Tim:
 
@@ -70,6 +71,12 @@ Record these decisions with Verbus and Tim:
 
 Do not infer these values from the presence of `/srv/EDI` in meeting notes:
 that was a sample-file location, not confirmation of a writable receiving inbox.
+
+The transport POC uses a private account-owned directory, fictional files,
+and a manually invoked sender. It does not require the Rust API contract to
+test file delivery. Follow [server-transfer.md](server-transfer.md) for that
+bounded test; agree on the production inbox and consumer protocol before
+connecting it to Tim's service.
 
 ## 3. Prepare one fictional file on an isolated local database
 
@@ -89,26 +96,31 @@ real claim data. A dry run prints payload contents, so only use synthetic input.
 Never commit generated files. Archive the original bytes securely before transfer;
 do not regenerate a different file during a retry.
 
-## 4. Transfer design to implement after agreement
+## 4. Implemented transfer behavior
 
-- Generate a stable opaque transfer ID; retain batch/control IDs and SHA-256
-  internally for correlation. Do not put names/member IDs in filenames or logs.
+- Use the exact file's SHA-256 as a stable transfer ID within a destination.
+  An optional batch UUID links sender events to generation metadata. Never
+  put names/member IDs in transport filenames or logs.
 - Copy immutable bytes from an approved outbox with subprocess argument lists
   (no shell string interpolation), SSH key auth, verified host key,
   noninteractive failure, connect/overall timeouts and bounded retry backoff.
-- Use a temporary name outside the receiver's ready namespace.
-  Verify remote byte count and SHA-256, then publish by an atomic rename on
-  the same filesystem or the receiver's agreed completion-marker protocol.
+- Use a private `.part` file outside the inbox. Verify its byte count and
+  SHA-256, then publish by an atomic no-overwrite hard link on the same
+  filesystem. Only complete files acquire an inbox `.edi` name.
 - Retries reuse the same transfer ID and payload hash. Detect already-published
   files after an uncertain network result; never blindly submit twice.
+  A durable receipt prevents redelivery after a consumer moves the file.
+  An interrupted publication with neither a final file nor a completed receipt
+  stops with `publication_uncertain` for operator review.
 - Append structured UTC audit events: ID, phase, attempt, outcome, bytes/hash,
   duration and sanitized error category. Never log raw EDI, passwords,
   patient/member names or arbitrary API error bodies.
 - Separate generated, transfer-started, uploaded, checksum-verified,
   published, processing, response-received and reconciled states.
   Upload success does not set the claim or batch to adjudication "accepted".
-- Protect and rotate local logs; agree central retention/access and
-  tamper-evidence before describing the audit as production compliant.
+- Logs and receipts are private and synchronized to disk. Rotation, central
+  retention/access, and tamper-evidence are deployment decisions still pending;
+  these local logs are not a claim of production compliance.
 
 ## 5. Acceptance tests before turning on a worker
 

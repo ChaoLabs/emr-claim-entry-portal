@@ -12,10 +12,10 @@ addresses belong in this public repository.
 | CMS-1500 capture and reference validation | Chao / portal | Existing demo |
 | 837P generation and batch metadata | Chao / Janus candidate | Integrated CLI prototype |
 | Read-only export checks | Portal / Vercel | Included in this integration |
-| FHIR member/provider import into PostgreSQL | Tim / Janus | External work; interface not verified |
-| SCP transfer and transfer audit trail | Chao / Janus and Vesta | CLI implemented; verify on the actual servers using the transfer runbook |
-| Per-claim Rust API adjudication and 835 | Tim / Vesta | Endpoint/schema/auth not supplied |
-| Sample files and operational requirements | Verbus | Await confirmed paths and synthetic samples |
+| Provider/member reference data in PostgreSQL | Tim / Vesta | Small dataset shown in local demo; full server load pending |
+| SCP transfer and transfer audit trail | Chao / Janus and Vesta | Private-inbox transfer verified; shared 837P target supported by CLI |
+| Claim server processing and 835 | Tim / Vesta | Local demo reviewed October 5; Vesta deployment and joint test pending |
+| Shared handoff directories | Verbus / Vesta | `/srv/X12/837P` input and `/srv/X12/835` responses confirmed October 5 |
 
 Vercel remains a demonstration, separate from the Janus/Vesta server pipeline.
 Do not add SSH passwords or keys to Vercel, run a long-lived SCP worker there,
@@ -72,11 +72,20 @@ Record these decisions with Verbus and Tim:
 Do not infer these values from the presence of `/srv/EDI` in meeting notes:
 that was a sample-file location, not confirmation of a writable receiving inbox.
 
-The transport POC uses a private account-owned directory, fictional files,
-and a manually invoked sender. It does not require the Rust API contract to
-test file delivery. Follow [server-transfer.md](server-transfer.md) for that
-bounded test; agree on the production inbox and consumer protocol before
-connecting it to Tim's service.
+The initial transport POC used a private account-owned inbox. The October 5
+meeting agreed to hand off fictional files through the shared
+`/srv/X12/837P` directory on Vesta, with responses in `/srv/X12/835`. Use the
+shared-inbox procedure in [server-transfer.md](server-transfer.md); private
+transfer state remains separate. Tim will deploy and configure the consumer.
+Folder-based delivery can proceed without an API endpoint. Consumer file
+discovery, processing status, reference-data acceptance, and 835 correlation
+still require a joint test. Any direct API integration remains a separate
+contract. Directory permissions observed in this POC are for fictional tests;
+agree restricted shared access before using real claims.
+
+Tim also plans a private backend repository that can reference this portal as
+a Git submodule. That addition belongs in the backend repository after access
+is provided; it does not require copying Rust code into this public portal.
 
 ## 3. Prepare one fictional file on an isolated local database
 

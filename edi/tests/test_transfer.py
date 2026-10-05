@@ -20,6 +20,8 @@ class LocalTransport:
 
     def __init__(self, args):
         self.root = Path(args.remote_root)
+        self.inbox = args.remote_inbox
+        self.file_mode = int(args.file_mode, 8)
         self.uploads = 0
         self.actions = []
         self.interrupt_upload = False
@@ -29,7 +31,8 @@ class LocalTransport:
     def request(self, action, digest, size, token):
         self.actions.append(action)
         try:
-            result = receiver.receive(action, self.root, digest, size, token)
+            result = receiver.receive(action, self.root, digest, size, token,
+                                      self.inbox, self.file_mode)
         except receiver.TransferError as exc:
             raise sender.TransportError(str(exc)) from exc
         if action == "publish" and self.lose_ack:
@@ -49,6 +52,202 @@ class LocalTransport:
             assert not list((self.root / "inbox").iterdir())
             raise sender.TransportError("scp_failed")
         part.write_bytes(data)
+
+
+class SharedInboxTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.base = Path(self.directory.name)
+        self.root = self.base / "private-state"
+        self.inbox = self.base / "837P"
+        self.inbox.mkdir()
+        self.inbox.chmod(0o777)  # Administrator-managed POC inbox.
+        self.payload = self.base / "original.edi"
+        self.data = b"ISA*FICTIONAL~ST*837*0001~CLM*TEST~SE*3*0001~IEA*1*1~"
+        self.payload.write_bytes(self.data)
+        self.digest = hashlib.sha256(self.data).hexdigest()
+        self.identity = self.base / "key"
+        self.identity.touch(mode=0o600)
+        self.args = sender.argument_parser().parse_args([
+            str(self.payload), "--host", "test@vesta.example",
+            "--identity", str(self.identity), "--remote-root", str(self.root),
+            "--remote-inbox", str(self.inbox), "--file-mode", "0644",
+            "--state-dir", str(self.base / "sender"),
+        ])
+        self.transport = LocalTransport(self.args)
+
+    def transfer(self):
+        return sender.transfer(self.args, lambda args: self.transport, sleep=lambda seconds: None)
+
+    def receipt_path(self):
+        destination_id = hashlib.sha256(str(self.inbox).encode()).hexdigest()
+        return self.root / "receipts" / destination_id / f"{self.digest}.json"
+
+    def test_complete_shared_delivery_keeps_state_private(self):
+        result = self.transfer()
+        final = Path(result["remote_file"])
+        self.assertEqual(final.parent, self.inbox)
+        self.assertEqual(final.read_bytes(), self.data)
+        self.assertEqual(final.stat().st_mode & 0o777, 0o644)
+        self.assertEqual(self.inbox.stat().st_mode & 0o777, 0o777)
+        self.assertFalse((self.inbox / "inbox").exists())
+        for path in [self.root, *self.root.rglob("*")]:
+            self.assertEqual(path.stat().st_mode & 0o077, 0, str(path))
+        receipt = receiver.read_json(self.receipt_path())
+        self.assertEqual(receipt["version"], 2)
+        self.assertEqual(receipt["destination"], str(final))
+        self.assertEqual(receipt["file_mode"], "0644")
+        self.assertEqual(receipt["state"], "published")
+        log = (self.root / "logs" / "receive.jsonl").read_text()
+        self.assertNotIn("FICTIONAL", log)
+        self.assertEqual(json.loads(log.splitlines()[-1])["destination"], str(final))
+
+    def test_old_private_receipt_does_not_skip_shared_delivery(self):
+        token = uuid.uuid4().hex
+        receiver.receive("prepare", self.root, self.digest, len(self.data), token)
+        (self.root / "staging" / f"{self.digest}.{token}.part").write_bytes(self.data)
+        receiver.receive("publish", self.root, self.digest, len(self.data), token)
+        legacy = self.root / "receipts" / f"{self.digest}.json"
+        original = legacy.read_bytes()
+        self.assertEqual(self.transfer()["status"], "published")
+        self.assertEqual(legacy.read_bytes(), original)
+        self.assertTrue(self.receipt_path().exists())
+
+    def test_repeat_after_consumer_moves_shared_file_does_not_redeliver(self):
+        final = Path(self.transfer()["remote_file"])
+        final.rename(self.base / "processed.edi")
+        self.assertEqual(self.transfer()["status"], "already_published")
+        self.assertEqual(self.transport.uploads, 1)
+        self.assertFalse(list(self.inbox.iterdir()))
+
+    def test_destination_change_has_its_own_receipt(self):
+        self.transfer()
+        original_receipt = self.receipt_path().read_bytes()
+        original_inbox = self.inbox
+        self.inbox = self.base / "another-inbox"
+        self.inbox.mkdir()
+        self.args.remote_inbox = str(self.inbox)
+        self.transport = LocalTransport(self.args)
+        self.assertEqual(self.transfer()["status"], "published")
+        self.assertTrue((original_inbox / f"{self.digest}.edi").exists())
+        self.assertNotEqual(self.receipt_path().read_bytes(), original_receipt)
+
+    def test_lost_reply_does_not_publish_twice(self):
+        self.transport.lose_ack = True
+        self.assertEqual(self.transfer()["status"], "already_published")
+        self.assertEqual(self.transport.uploads, 1)
+        self.assertEqual(len(list(self.inbox.iterdir())), 1)
+
+    def test_crash_before_completed_shared_receipt_reconciles(self):
+        real_write = receiver.write_json
+
+        def crash(path, record):
+            if record["state"] == "published":
+                raise OSError("simulated receipt write failure")
+            real_write(path, record)
+
+        with patch.object(receiver, "write_json", side_effect=crash):
+            with self.assertRaises(OSError):
+                self.transfer()
+        final = self.inbox / f"{self.digest}.edi"
+        self.assertEqual(final.read_bytes(), self.data)
+        self.assertEqual(final.stat().st_mode & 0o777, 0o644)
+        self.assertEqual(self.transfer()["status"], "reconciled")
+        self.assertEqual(self.transport.uploads, 1)
+        self.assertEqual(receiver.read_json(self.receipt_path())["state"], "published")
+
+    def test_corruption_stays_private(self):
+        token = uuid.uuid4().hex
+        receiver.receive("prepare", self.root, self.digest, len(self.data), token, self.inbox, 0o644)
+        temporary = self.root / "staging" / f"{self.digest}.{token}.part"
+        temporary.write_bytes(b"corrupt")
+        with self.assertRaisesRegex(receiver.TransferError, "checksum_mismatch"):
+            receiver.receive("publish", self.root, self.digest, len(self.data), token, self.inbox, 0o644)
+        self.assertEqual(temporary.stat().st_mode & 0o777, 0o600)
+        self.assertFalse(list(self.inbox.iterdir()))
+        self.assertFalse(self.receipt_path().exists())
+
+    def test_preexisting_file_is_not_overwritten_or_adopted(self):
+        final = self.inbox / f"{self.digest}.edi"
+        final.write_bytes(self.data)
+        with self.assertRaisesRegex(sender.TransportError, "destination_conflict"):
+            self.transfer()
+        self.assertEqual(self.transport.uploads, 0)
+        self.assertEqual(final.read_bytes(), self.data)
+        self.assertFalse(self.receipt_path().exists())
+
+    def test_missing_shared_inbox_is_not_created(self):
+        self.inbox.rmdir()
+        with self.assertRaisesRegex(sender.TransportError, "shared_inbox_unavailable"):
+            self.transfer()
+        self.assertFalse(self.inbox.exists())
+
+    def test_shared_symlink_is_rejected(self):
+        alias = self.base / "alias"
+        alias.symlink_to(self.inbox)
+        self.args.remote_inbox = str(alias)
+        self.transport = LocalTransport(self.args)
+        with self.assertRaisesRegex(sender.TransportError, "unsafe_shared_inbox"):
+            self.transfer()
+        self.assertFalse(list(self.inbox.iterdir()))
+
+    def test_unsafe_paths_and_private_mode_widening_are_rejected(self):
+        for path in ["relative", "/tmp/../inbox", "/tmp/$(touch bad)",
+                     str(self.root), str(self.root / "inbox"), str(self.base)]:
+            with self.subTest(path=path):
+                self.args.remote_inbox = path
+                with self.assertRaises(receiver.TransferError):
+                    sender.validate(self.args)
+        self.args.remote_inbox = None
+        with self.assertRaisesRegex(receiver.TransferError, "shared_inbox_required_for_file_mode"):
+            sender.validate(self.args)
+
+    def test_mode_change_does_not_modify_an_existing_delivery(self):
+        final = Path(self.transfer()["remote_file"])
+        self.args.file_mode = "0640"
+        self.transport = LocalTransport(self.args)
+        with self.assertRaisesRegex(sender.TransportError, "receipt_conflict"):
+            self.transfer()
+        self.assertEqual(final.stat().st_mode & 0o777, 0o644)
+        self.assertEqual(self.transport.uploads, 0)
+
+    def test_dry_run_reports_target_without_creating_state(self):
+        self.args.dry_run = True
+        result = self.transfer()
+        self.assertEqual(result["remote_inbox"], str(self.inbox))
+        self.assertEqual(result["file_mode"], "0644")
+        self.assertFalse(self.root.exists())
+        self.assertFalse(self.args.state_dir.exists())
+        self.assertFalse(self.transport.actions)
+
+    def test_ssh_request_passes_and_checks_shared_destination(self):
+        transport = sender.SSHTransport(self.args)
+        response = {"status": "upload_required", "transfer_id": self.digest,
+                    "sha256": self.digest, "bytes": len(self.data),
+                    "destination": str(self.inbox / f"{self.digest}.edi"), "file_mode": "0644"}
+        result = subprocess.CompletedProcess([], 0, json.dumps(response), "")
+        with patch.object(transport, "run", return_value=result) as run:
+            transport.request("prepare", self.digest, len(self.data), uuid.uuid4().hex)
+            self.assertIn(f"--inbox {self.inbox}", run.call_args.args[0][-1])
+            self.assertIn("--file-mode 0644", run.call_args.args[0][-1])
+            response["destination"] = "/wrong/inbox.edi"
+            result.stdout = json.dumps(response)
+            with self.assertRaisesRegex(sender.TransportError, "invalid_response"):
+                transport.request("prepare", self.digest, len(self.data), uuid.uuid4().hex)
+
+    def test_stdin_receiver_publishes_to_shared_directory(self):
+        token = uuid.uuid4().hex
+        source = Path(receiver.__file__).read_text()
+        args = [sys.executable, "-", "prepare", str(self.root), self.digest,
+                str(len(self.data)), token, "--inbox", str(self.inbox), "--file-mode", "0644"]
+        result = subprocess.run(args, input=source, text=True, capture_output=True, check=True)
+        self.assertEqual(json.loads(result.stdout)["status"], "upload_required")
+        (self.root / "staging" / f"{self.digest}.{token}.part").write_bytes(self.data)
+        args[2] = "publish"
+        result = subprocess.run(args, input=source, text=True, capture_output=True, check=True)
+        self.assertEqual(json.loads(result.stdout)["status"], "published")
+        self.assertEqual((self.inbox / f"{self.digest}.edi").read_bytes(), self.data)
 
 
 class TransferTests(unittest.TestCase):

@@ -193,6 +193,7 @@ The workflow tests cover dashboard/detail rendering, dynamic capture of more tha
 - [EDI export ERD](docs/database/edi-erd.md)
 - [Janus/Vesta phased workflow](docs/server-workflow.md)
 - [SCP transfer setup, commands, and recovery](docs/server-transfer.md)
+- [Shared Vesta 837P inbox handoff](docs/server-transfer.md#shared-837p-inbox-october-5-handoff)
 - [Final CMS-1500 ERD](docs/database/cms1500-erd.md)
 - [Data model and design rationale](docs/database/cms1500-data-model.md)
 - [PostgreSQL-oriented schema](docs/database/schema.sql)

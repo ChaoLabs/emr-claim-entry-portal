@@ -39,6 +39,84 @@ The receiver creates its folders with mode `0700` and files with mode `0600`.
 It rejects preexisting shared or symlink directories rather than changing
 unrelated permissions. No `sudo` or `/srv/EDI` access is required for this POC.
 
+## Shared 837P inbox (October 5 handoff)
+
+The confirmed Vesta handoff directories are `/srv/X12/837P` for incoming
+claims and `/srv/X12/835` for responses. Tim owns the Claim server deployment
+and consumer. This sender publishes a complete `.edi` file in the 837P directory;
+it does not start the consumer or create an 835 response.
+
+Use `--remote-inbox` for the shared inbox and keep `--remote-root` as a separate
+private state directory. Do not set the root to the shared inbox or copy files
+there manually before using this command: publication deliberately refuses
+an existing destination file without a matching receipt.
+
+On Janus, reuse the existing checkout, virtual environment, SSH key, and
+fictional `test-001.edi`. Replace only the example hostname below with the
+previously verified Vesta host:
+
+```bash
+.venv/bin/python tools/transfer_edi.py \
+  "$HOME/emr-claim-poc/outbox/test-001.edi" \
+  --host chao@vesta.example \
+  --remote-root /srv/X12/chao-transfer-state \
+  --remote-inbox /srv/X12/837P \
+  --file-mode 0644 \
+  --identity "$HOME/.ssh/emr_vesta_ed25519" \
+  --state-dir "$HOME/emr-claim-poc/transfer-state" \
+  --dry-run
+```
+
+Run the same command without `--dry-run` to deliver it, then repeat once to
+verify `already_published`. The initial dry run checks local arguments and
+bytes only; the actual transfer checks remote paths and permissions. The final
+path is `/srv/X12/837P/<sha256>.edi`, with no extra `inbox/` directory. Keep the
+old private-inbox file and receipts as historical evidence of the earlier test.
+This handoff reuses the same bytes and does not generate another claim.
+
+The shared directory must already exist, be accessible to the sender, and have
+no symlink components. The receiver does not create, chmod, or chown it. The
+private root must be separate from the shared inbox, and its `staging/` must be
+on the same filesystem as the inbox. A private root under `/srv/X12` provides
+the intended layout; a separately mounted inbox will fail with
+`different_filesystems` and must be reviewed before delivery.
+
+`--file-mode` defaults to `0600`. The `0644` example deliberately allows the
+fictional sample to be read by Tim's separate service account while the admin
+configures shared access. It also allows other local users to read that file.
+The observed POC directories were writable by all local users; use only
+fictional data in that configuration. Before real claim data, the administrator
+must restrict the directories to the agreed accounts/group and verify the
+service can read files with the selected mode. `0640` reads depend on the actual
+file group; the tool does not change ownership or add users to groups.
+
+Staging, receipts, locks, and audit logs remain private. Shared-file permissions
+are applied only after verification, before the atomic publication. Existing
+private-inbox commands and version-1 receipts keep their original behavior.
+Shared deliveries use version-2 receipts under
+`<remote-root>/receipts/<sha256-of-inbox-path>/<file-sha256>.json`. These include
+the exact destination and file mode. They do not inherit the old private-inbox
+receipt, and they continue to suppress duplicates after Tim moves a file into
+processing. Keep the same private root and mode on subsequent attempts. A
+mode change for a recorded delivery produces `receipt_conflict`; it does not
+change the delivered file or send it again.
+
+To inspect the new receiver evidence on Vesta:
+
+```bash
+tail -n 5 /srv/X12/chao-transfer-state/logs/receive.jsonl
+find /srv/X12/chao-transfer-state/receipts -type f -name '*.json' \
+  -exec python3 -m json.tool {} \;
+```
+
+If the inbox file has disappeared, consult the receipt and Tim's processing
+records before redelivery. A completed transfer confirms delivery only. A
+fictional NPI/member may fail Tim's business checks against his reference data.
+Agree on `.edi` discovery, startup scans, processing moves, duplicate claim
+handling, and 835 naming/correlation with Tim before calling the complete
+claims workflow integrated. The `/srv/X12/835` directory is reserved for his
+responses and is not modified by this script.
+
 ## Send the existing fictional file
 
 From the checkout on Janus, first hash and validate the command without network
@@ -118,6 +196,8 @@ SSH stderr. Sender routing fields are private operational metadata.
 | `publication_uncertain` | Review receipt, inbox, and consumer records before any redelivery |
 | `directory_must_be_private`, `file_must_be_private` | Check ownership and access on this POC's paths |
 | `receiver_filesystem_error` | Check destination space, permissions, and Python availability |
+| `shared_inbox_unavailable` | Administrator must create the agreed inbox and provide write/traverse access |
+| `unsafe_shared_inbox` | Use a real absolute inbox path, separate from the private state directory |
 | `transfer_busy` | Another sender or publisher is active; retry after it completes |
 
 Partial/rejected uploads remain in private staging, and interrupted local runs

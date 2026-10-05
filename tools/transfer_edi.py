@@ -37,6 +37,7 @@ RECEIVER_CODES = {
     "source_changed", "different_filesystems", "invalid_receipt",
     "receipt_conflict", "destination_conflict", "publication_uncertain",
     "transfer_busy", "checksum_mismatch", "receiver_filesystem_error",
+    "unsafe_shared_inbox", "shared_inbox_unavailable",
 }
 
 
@@ -48,6 +49,15 @@ def validate(args):
     if (not re.fullmatch(r"/[a-zA-Z0-9_./-]+", args.remote_root)
             or any(part in {".", "..", ""} for part in args.remote_root.split("/")[1:])):
         raise common.TransferError("invalid_remote_root")
+    if args.remote_inbox is not None:
+        if (not re.fullmatch(r"/[a-zA-Z0-9_./-]+", args.remote_inbox)
+                or any(part in {".", "..", ""} for part in args.remote_inbox.split("/")[1:])):
+            raise common.TransferError("invalid_remote_inbox")
+        root, inbox = Path(args.remote_root), Path(args.remote_inbox)
+        if root == inbox or root in inbox.parents or inbox in root.parents:
+            raise common.TransferError("unsafe_shared_inbox")
+    elif args.file_mode != "0600":
+        raise common.TransferError("shared_inbox_required_for_file_mode")
     if not 1 <= args.port <= 65535 or not 1 <= args.attempts <= 5 or not 5 <= args.timeout <= 600:
         raise common.TransferError("invalid_limits")
     if args.batch_id:
@@ -107,8 +117,12 @@ class SSHTransport:
         return TransportError(fallback)
 
     def request(self, action, digest, size, token):
-        command = shlex.join(["python3", "-", action, self.args.remote_root,
-                              digest, str(size), token])
+        receiver_args = ["python3", "-", action, self.args.remote_root,
+                         digest, str(size), token]
+        if self.args.remote_inbox is not None:
+            receiver_args.extend(["--inbox", self.args.remote_inbox,
+                                  "--file-mode", self.args.file_mode])
+        command = shlex.join(receiver_args)
         result = self.run(["ssh", *self.options, "-p", str(self.args.port),
                            self.args.host, command], self.receiver_source)
         try:
@@ -127,6 +141,10 @@ class SSHTransport:
             raise self.failure(result, "ssh_failed")
         if (response.get("transfer_id"), response.get("sha256"), response.get("bytes")) != (digest, digest, size):
             raise TransportError("invalid_response")
+        if self.args.remote_inbox is not None and (
+                response.get("destination") != f"{self.args.remote_inbox}/{digest}.edi"
+                or response.get("file_mode") != self.args.file_mode):
+            raise TransportError("invalid_response")
         if response.get("status") not in SUCCESS | {"upload_required"}:
             raise TransportError("invalid_response")
         return response["status"]
@@ -144,7 +162,9 @@ def transfer(args, transport_factory=SSHTransport, sleep=time.sleep):
     if args.dry_run:
         digest, size = common.fingerprint(args.file)
         return {"status": "dry_run", "transfer_id": digest, "sha256": digest,
-                "bytes": size, "host": args.host, "remote_root": args.remote_root}
+                "bytes": size, "host": args.host, "remote_root": args.remote_root,
+                "remote_inbox": args.remote_inbox or f"{args.remote_root}/inbox",
+                "file_mode": args.file_mode}
 
     state_dir = common.private_dir(args.state_dir.expanduser())
     journal = state_dir / "transfers.jsonl"
@@ -160,6 +180,8 @@ def transfer(args, transport_factory=SSHTransport, sleep=time.sleep):
             fields = {"transfer_id": digest, "sha256": digest, "bytes": size,
                       "host": args.host, "port": args.port, "remote_root": args.remote_root,
                       "run_id": uuid.uuid4().hex}
+            if args.remote_inbox is not None:
+                fields.update(remote_inbox=args.remote_inbox, file_mode=args.file_mode)
             if args.batch_id:
                 fields["batch_id"] = args.batch_id
             common.audit(journal, "transfer_started", **fields)
@@ -180,7 +202,8 @@ def transfer(args, transport_factory=SSHTransport, sleep=time.sleep):
                     common.audit(journal, "transfer_complete", attempt=attempt,
                                  outcome=status, duration_ms=elapsed, **fields)
                     return {"status": status, "transfer_id": digest, "sha256": digest,
-                            "bytes": size, "remote_file": f"{args.remote_root}/inbox/{digest}.edi",
+                            "bytes": size,
+                            "remote_file": f"{args.remote_inbox or args.remote_root + '/inbox'}/{digest}.edi",
                             "audit_log": str(journal)}
                 except (TransportError, KeyboardInterrupt) as exc:
                     code = "interrupted" if isinstance(exc, KeyboardInterrupt) else str(exc)
@@ -198,6 +221,9 @@ def argument_parser():
     parser.add_argument("file", type=Path)
     parser.add_argument("--host", required=True, help="SSH user@hostname or user@IPv4")
     parser.add_argument("--remote-root", required=True, help="Absolute private directory; no spaces")
+    parser.add_argument("--remote-inbox", help="Existing shared inbox; default: <remote-root>/inbox")
+    parser.add_argument("--file-mode", choices=["0600", "0640", "0644"], default="0600",
+                        help="Published file mode; non-private modes require --remote-inbox")
     parser.add_argument("--identity", type=Path, required=True, help="Existing private SSH key")
     parser.add_argument("--state-dir", type=Path, required=True, help="Private local audit directory")
     parser.add_argument("--port", type=int, default=22)

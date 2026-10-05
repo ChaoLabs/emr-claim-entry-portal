@@ -1,4 +1,4 @@
-"""Private filesystem receiver, executed over SSH by transfer_edi.py.
+"""Filesystem receiver with private state, executed over SSH by transfer_edi.py.
 
 Python standard library only. No daemon, Django configuration, or installation.
 An inbox file means transport complete, never adjudication accepted.
@@ -137,18 +137,37 @@ def fingerprint(path, copy_to=None):
     return digest.hexdigest(), size
 
 
-def receive(action, root, digest, size, token):
+def shared_inbox(path, root):
+    """Use an existing operator-managed inbox without changing its permissions."""
+    path = Path(path)
+    if (not path.is_absolute() or path.resolve() != path
+            or path == root or root in path.parents or path in root.parents):
+        raise TransferError("unsafe_shared_inbox")
+    if not path.is_dir() or not os.access(path, os.W_OK | os.X_OK):
+        raise TransferError("shared_inbox_unavailable")
+    return path
+
+
+def receive(action, root, digest, size, token, inbox_path=None, file_mode=0o600):
     if (action not in {"prepare", "publish"}
             or not re.fullmatch(r"[0-9a-f]{64}", digest)
             or not re.fullmatch(r"[0-9a-f]{32}", token)
-            or not 0 < size <= MAX_BYTES):
+            or not 0 < size <= MAX_BYTES
+            or file_mode not in {0o600, 0o640, 0o644}
+            or (inbox_path is None and file_mode != 0o600)):
         raise TransferError("invalid_request")
     root = private_dir(root)
     staging = private_dir(root / "staging")
-    inbox = private_dir(root / "inbox")
+    inbox = private_dir(root / "inbox") if inbox_path is None else shared_inbox(inbox_path, root)
     receipts = private_dir(root / "receipts")
     locks = private_dir(root / "locks")
     log_dir = private_dir(root / "logs")
+    if inbox_path is not None:
+        # A receipt for the old private inbox must never suppress a delivery
+        # to the shared inbox. Bind receipts and locks to the destination.
+        destination_id = hashlib.sha256(str(inbox).encode("utf-8")).hexdigest()
+        receipts = private_dir(receipts / destination_id)
+        locks = private_dir(locks / destination_id)
     # Both names must be on one filesystem for an atomic, no-overwrite link.
     if staging.stat().st_dev != inbox.stat().st_dev:
         raise TransferError("different_filesystems")
@@ -156,6 +175,10 @@ def receive(action, root, digest, size, token):
     final = inbox / f"{digest}.edi"
     receipt_path = receipts / f"{digest}.json"
     fields = {"transfer_id": digest, "sha256": digest, "bytes": size}
+    version = 1
+    if inbox_path is not None:
+        version = 2
+        fields.update(destination=str(final), file_mode=f"{file_mode:04o}")
     log = log_dir / "receive.jsonl"
 
     def matches(path):
@@ -164,7 +187,7 @@ def receive(action, root, digest, size, token):
     def prior_result():
         if receipt_path.exists() or receipt_path.is_symlink():
             receipt = read_json(receipt_path)
-            if receipt.get("version") != 1 or any(receipt.get(k) != v for k, v in fields.items()):
+            if receipt.get("version") != version or any(receipt.get(k) != v for k, v in fields.items()):
                 raise TransferError("receipt_conflict")
             state = receipt.get("state")
             if state not in {"publishing", "published"}:
@@ -208,10 +231,18 @@ def receive(action, root, digest, size, token):
                 # Leave rejected bytes in private staging, outside the inbox.
                 raise TransferError("checksum_mismatch")
             audit(log, "checksum_verified", upload_token=token, **fields)
-            receipt = {"version": 1, **fields, "state": "publishing",
+            receipt = {"version": version, **fields, "state": "publishing",
                        "started_at_utc": utc_now()}
             write_json(receipt_path, receipt)
             audit(log, "publication_started", **fields)
+            # Set read permissions while the complete file is still in private
+            # staging. Publication is one atomic, no-overwrite link operation.
+            fd = private_open(temporary, os.O_RDONLY)
+            try:
+                os.fchmod(fd, file_mode)
+                os.fsync(fd)
+            finally:
+                os.close(fd)
             os.link(temporary, final, follow_symlinks=False)
             sync_dir(inbox)
             receipt.update(state="published", published_at_utc=utc_now())
@@ -232,10 +263,13 @@ def main():
     parser.add_argument("digest")
     parser.add_argument("size", type=int)
     parser.add_argument("token")
+    parser.add_argument("--inbox", type=Path, help="Existing shared inbox outside the private root")
+    parser.add_argument("--file-mode", choices=["0600", "0640", "0644"], default="0600")
     args = parser.parse_args()
     os.umask(0o077)
     try:
-        result = receive(args.action, args.root, args.digest, args.size, args.token)
+        result = receive(args.action, args.root, args.digest, args.size, args.token,
+                         args.inbox, int(args.file_mode, 8))
     except (TransferError, OSError) as exc:
         code = str(exc) if isinstance(exc, TransferError) else "receiver_filesystem_error"
         print(json.dumps({"status": "error", "code": code}))

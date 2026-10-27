@@ -1,9 +1,11 @@
+import hashlib
 import random
 import time
 import uuid
 
+from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
-from django.db import OperationalError, models, transaction
+from django.db import OperationalError, models, router, transaction
 
 ID_QUALIFIER_VALIDATOR = RegexValidator(
     regex=r"^[A-Za-z0-9]{2}$",
@@ -137,6 +139,68 @@ class SubmissionBatch(TimeStamped):
 
     def __str__(self):
         return f"{self.file_name} ({self.claim_count} claims)"
+
+
+class X12Document(models.Model):
+    """Exact generated file retained independently of the transport filesystem."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    batch = models.OneToOneField(
+        SubmissionBatch, on_delete=models.PROTECT, related_name="x12_document"
+    )
+    content = models.TextField()
+    sha256 = models.CharField(max_length=64, editable=False)
+    byte_count = models.PositiveBigIntegerField(editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"X12 document {self.pk}"
+
+    @staticmethod
+    def _encode_content(content):
+        if not isinstance(content, str) or not content:
+            raise ValidationError({"content": "X12 content must be a nonempty string."})
+        if "\x00" in content:
+            raise ValidationError({"content": "X12 content cannot contain NUL characters."})
+        try:
+            return content.encode("utf-8")
+        except UnicodeEncodeError as exc:
+            raise ValidationError({"content": "X12 content must be valid UTF-8 text."}) from exc
+
+    def save(self, *args, **kwargs):
+        # Normal ORM creation also derives integrity metadata from the exact text.
+        # Bulk/queryset operations and SQL bypass this method; this is not a
+        # database-level immutable audit store.
+        using = kwargs.get("using") or router.db_for_write(type(self), instance=self)
+        if not self._state.adding or type(self).objects.using(using).filter(pk=self.pk).exists():
+            raise ValidationError("An existing X12 archive cannot be modified.")
+        payload = self._encode_content(self.content)
+        self.sha256 = hashlib.sha256(payload).hexdigest()
+        self.byte_count = len(payload)
+        # An insert also prevents a concurrently inserted matching PK from being
+        # overwritten by Django's default update-then-insert save behavior.
+        kwargs["force_insert"] = True
+        return super().save(*args, **kwargs)
+
+    @classmethod
+    def archive(cls, *, batch, content):
+        """Create once per batch; a retry may return only the identical payload."""
+        payload = cls._encode_content(content)
+        digest = hashlib.sha256(payload).hexdigest()
+        document, _ = cls.objects.get_or_create(
+            batch=batch,
+            defaults={"content": content, "sha256": digest, "byte_count": len(payload)},
+        )
+        if (
+            document.content != content
+            or document.sha256 != digest
+            or document.byte_count != len(payload)
+        ):
+            raise ValidationError("An existing X12 archive cannot be replaced for this batch.")
+        return document
 
 
 class BatchClaim(TimeStamped):

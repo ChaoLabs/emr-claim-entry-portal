@@ -22,6 +22,11 @@ No claims tables or existing migrations were replaced. EDI migration 0001 adds
 TradingPartner, ControlNumber, SubmissionBatch and BatchClaim. The existing
 Vercel build applies migrations; it does not generate/send EDI or seed a real partner.
 
+The October 23 archive addition introduces one further table, `edi_x12document`,
+through EDI migration 0002. It retains the complete generated X12 file as one
+string linked to its existing batch. The original import comparison above
+describes the earlier integration, not the current table count.
+
 ## Integration corrections
 
 - Retain 4–9 digit transaction control numbers instead of truncating at 9999.
@@ -44,6 +49,14 @@ Vercel build applies migrations; it does not generate/send EDI or seed a real pa
 - Add read-only Claim Detail export checks; no public generation/submission action.
 - Make generated records view-only in Admin. This does not make database history
   immutable against privileged operators.
+- Archive the exact final UTF-8 file contents, including its trailing newline,
+  alongside batch records in the same database transaction. Retain SHA-256 and
+  byte count for integrity checks. Identical archive retries reuse the same row;
+  a different payload for that batch is rejected. Archive records are view-only
+  in Admin and protect their batch from ordinary ORM deletion.
+- Restore archived files with `restore_x12` rather than regenerating historical
+  content from changed claim records. See [X12 archive](x12-archive.md) for the
+  storage contract, migration, and review procedure.
 
 ## Important limits
 
@@ -53,8 +66,12 @@ are complete. Passing export checks does not mean coverage is active, a claim
 is clinically valid, a payer accepted it, or money was paid.
 
 The exporter supports one primary coverage per claim. It has no 2320/2330 COB,
-999/277CA handling, payer companion-guide certification, original payload
-archive, SCP transport, Rust API client, FHIR import or 835 reconciliation.
+999/277CA handling, payer companion-guide certification, Rust API client,
+FHIR import or 835 reconciliation. Exact original payload storage and the
+manually invoked SCP transport are implemented. Archiving a file is not evidence
+of transfer or payer acceptance; transport receipts remain a separate record.
+Dashboard-triggered generation and the JSON interface with Jason remain to be
+agreed and integrated.
 Some source defaults (such as signature/assignment codes and demographic
 relationship inference) still require business-rule review.
 The development reference subset is not an authoritative production dataset.

@@ -1,3 +1,4 @@
+import hashlib
 import io
 import os
 import stat
@@ -16,7 +17,7 @@ from django.urls import reverse
 
 from claims.models import Claim, ClaimCoverage, ClaimDiagnosis, ClaimProvider
 from edi import builders, context, envelope, segments, validators
-from edi.models import BatchClaim, ControlNumber, SubmissionBatch, TradingPartner
+from edi.models import BatchClaim, ControlNumber, SubmissionBatch, TradingPartner, X12Document
 from tools.make_test_claims import create as create_test_claims
 
 
@@ -139,6 +140,51 @@ class ExportTests(TestCase):
             self.assertEqual(list(Path(directory).iterdir()), [])
         self.assertEqual(ControlNumber.objects.count(), 0)
         self.assertEqual(SubmissionBatch.objects.count(), 0)
+        self.assertEqual(X12Document.objects.count(), 0)
+
+    def test_archive_matches_exact_file_bytes_for_both_output_formats(self):
+        for one_line in (False, True):
+            with self.subTest(one_line=one_line), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "test.edi"
+                output = self.run_export(claim=[self.claim.claim_number], out=str(path),
+                                         one_line=one_line)
+                document = X12Document.objects.latest("created_at")
+                payload = path.read_bytes()
+                self.assertEqual(document.content.encode("utf-8"), payload)
+                self.assertEqual(document.sha256, hashlib.sha256(payload).hexdigest())
+                self.assertEqual(document.byte_count, len(payload))
+                self.assertTrue(payload.endswith(b"~\n"))
+                self.assertEqual(payload.count(b"\n"),
+                                 1 if one_line else document.batch.segment_count)
+                self.assertIn(str(document.id), output)
+        # Each new export is a new historical artifact, not an update to the
+        # previous archive for the same claim.
+        self.assertEqual(X12Document.objects.count(), 2)
+        self.assertEqual(SubmissionBatch.objects.count(), 2)
+
+    def test_archive_survives_claim_edit_and_output_file_removal(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "test.edi"
+            self.run_export(claim=[self.claim.claim_number], out=str(path))
+            payload = path.read_bytes()
+            path.unlink()
+        self.claim.claim_number = "CHANGED-AFTER-EXPORT"
+        self.claim.save(update_fields=["claim_number"])
+        document = X12Document.objects.get()
+        self.assertEqual(document.content.encode("utf-8"), payload)
+        self.assertEqual(document.batch.claims.get().claim_number, "CLM-TEST-003")
+
+    def test_archive_failure_rolls_back_batch_and_removes_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "test.edi"
+            with patch("edi.models.X12Document.archive", side_effect=DatabaseError("test")):
+                with self.assertRaises(DatabaseError):
+                    self.run_export(claim=[self.claim.claim_number], out=str(path))
+            self.assertFalse(path.exists())
+        self.assertFalse(X12Document.objects.exists())
+        self.assertFalse(BatchClaim.objects.exists())
+        self.assertFalse(SubmissionBatch.objects.exists())
+        self.assertEqual(ControlNumber.objects.count(), 3)
 
     def test_file_batch_and_control_numbers_match(self):
         ControlNumber.objects.create(trading_partner=self.partner,

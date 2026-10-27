@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import BatchClaim, ControlNumber, SubmissionBatch, TradingPartner
+from .models import BatchClaim, ControlNumber, SubmissionBatch, TradingPartner, X12Document
 
 
 @admin.register(TradingPartner)
@@ -37,3 +37,11 @@ class SubmissionBatchAdmin(ReadOnlyAdmin):
 @admin.register(BatchClaim)
 class BatchClaimAdmin(ReadOnlyAdmin):
     list_display = ("batch", "position", "claim_id")
+
+
+@admin.register(X12Document)
+class X12DocumentAdmin(ReadOnlyAdmin):
+    list_display = ("id", "batch", "byte_count", "sha256", "created_at")
+    list_select_related = ("batch",)
+    search_fields = ("batch__file_name", "sha256")
+    readonly_fields = ("id", "batch", "content", "sha256", "byte_count", "created_at")

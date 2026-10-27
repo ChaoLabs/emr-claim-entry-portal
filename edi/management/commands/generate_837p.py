@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from claims.models import Claim
 from edi import builders, context, envelope, formatters, segments, validators
-from edi.models import BatchClaim, ControlNumber, SubmissionBatch, TradingPartner
+from edi.models import BatchClaim, ControlNumber, SubmissionBatch, TradingPartner, X12Document
 
 
 class Command(BaseCommand):
@@ -65,7 +65,8 @@ class Command(BaseCommand):
         if options["dry_run"]:
             self.stdout.write(text)
         else:
-            self.write_batch(partner, accepted, file_name, numbers, interchange, text)
+            document = self.write_batch(partner, accepted, file_name, numbers, interchange, text)
+            self.stdout.write(f"archived      {document.id}")
 
         self.report(file_name, accepted, rejected, interchange, counter,
                     issues, options)
@@ -129,22 +130,28 @@ class Command(BaseCommand):
         # No overwrite, including symlinks. A transfer worker must NOT watch
         # this directory yet: durable ready-publication is a separate phase.
         path = Path(file_name)
+        # Encode once so the archive and file include identical whitespace,
+        # segment separators and the final newline on every operating system.
+        content = text + "\n"
+        payload = content.encode("utf-8")
         created = False
         try:
             with transaction.atomic():
                 fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
                 created = True
-                with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                    handle.write(text + "\n")
+                with os.fdopen(fd, "wb") as handle:
+                    handle.write(payload)
                     handle.flush()
                     os.fsync(handle.fileno())
-                self.record_batch(partner, accepted, path.name, numbers, interchange)
+                batch = self.record_batch(partner, accepted, path.name, numbers, interchange)
+                document = X12Document.archive(batch=batch, content=content)
         except Exception as exc:
             if created:
                 path.unlink(missing_ok=True)
             if isinstance(exc, OSError):
                 raise CommandError("cannot create output file; check path, permissions and existing files") from exc
             raise
+        return document
 
     @transaction.atomic
     def record_batch(self, partner, accepted, file_name, numbers, interchange):

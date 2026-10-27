@@ -64,7 +64,7 @@ The hosted instance remains a development demonstration. Do not enter real PHI o
 
 The `edi` app is an experimental exporter for saved claims, integrated from [kzzz12138/cms1500-to-837p-converter](https://github.com/kzzz12138/cms1500-to-837p-converter) at commit `6c429a78e50cb5db36e14ed038a79615d37d0576`. See [integration notes](docs/edi-integration.md) for local corrections and limitations.
 
-It generates an X12-shaped 837P test file, not a certified payer-ready transaction. The file uses version `005010X222A1`. Generation writes a local file; it does not send anything to a payer or a clearinghouse. Claim Detail shows read-only **837P Export Readiness** checks. The separate `tools/transfer_edi.py` CLI can transfer a generated file between approved servers using SCP, checksum verification, durable receipts, and metadata-only audit logs. It is manually invoked; no scheduled worker, web download, API adjudication, or 835 return is implemented.
+It generates an X12-shaped 837P test file, not a certified payer-ready transaction. The file uses version `005010X222A1`. Generation writes a local file and retains its exact contents as a single string in the `X12Document` database table; it does not send anything to a payer or a clearinghouse. Claim Detail shows read-only **837P Export Readiness** checks. The separate `tools/transfer_edi.py` CLI can transfer a generated file between approved servers using SCP, checksum verification, durable receipts, and metadata-only audit logs. It is manually invoked; no scheduled worker, public web generation/download, API adjudication, or 835 return is implemented.
 
 ### Try it locally
 
@@ -80,7 +80,7 @@ uv run python manage.py generate_837p --claim CLM-TEST-003 --dry-run
 
 The demo claim `CLM-DEMO-001` from `seed_sample_claims` does not pass the checks. Its billing ZIP has 5 digits and its fictional tax ID is not a nine-digit EIN. `tools/make_test_claims.py` adds two more claims. `CLM-TEST-003` passes the prototype checks. `CLM-TEST-002` fails because its payer has no payer ID.
 
-`--dry-run` prints the file on the screen. It does not take control numbers and does not save a batch. To write a test file to disk, run the command without `--dry-run`.
+`--dry-run` prints the file on the screen. It does not take control numbers and does not save a batch or an X12 document. To write a test file to disk and archive its contents, run the command without `--dry-run`.
 
 ```bash
 uv run python manage.py generate_837p --claim CLM-TEST-003
@@ -100,7 +100,7 @@ The file is saved in the current folder, with owner-only permissions on Unix. Ex
 | `--one-line` | Puts all segments on one line. By default each segment is on its own line. |
 | `--ignore TAG` | Skips issues whose tag starts with TAG, for example `--ignore "2010AA N403"`. You can repeat it. |
 | `--force` | Keeps claims that have issues. Structurally unsupported claims, including multiple coverages or ambiguous billing providers, are still left out. Investigation only; not permission to submit invalid claims. |
-| `--dry-run` | Prints the file. It does not take control numbers and does not save a batch. |
+| `--dry-run` | Prints the file. It does not take control numbers and does not save a batch or an X12 document. |
 
 ### What the command does
 
@@ -110,7 +110,7 @@ The file is saved in the current folder, with owner-only permissions on Unix. Ex
 4. It builds the segments for the claims that passed.
 5. It takes the next ISA13, GS06 and ST02 numbers for the trading partner.
 6. It adds the ISA, GS, ST and BHT segments, the submitter and receiver loops, and the SE, GE and IEA segments.
-7. It writes the file. It also saves one `SubmissionBatch` row and one `BatchClaim` row for each claim.
+7. It writes the file. In the same database transaction it saves one `SubmissionBatch`, one `BatchClaim` for each claim, and one `X12Document` containing the complete file string, SHA-256 checksum, and UTF-8 byte count.
 8. It prints a summary. The summary shows included and excluded claims (generation only, not adjudication), the segment count, SE01, the number of HL loops, and the issues grouped by tag.
 
 ### Checks before a claim is built
@@ -162,8 +162,11 @@ The envelope is ISA/GS/ST/BHT through SE/GE/IEA. Inside are submitter (1000A), r
 | `ControlNumber` | The last ISA13, GS06 and ST02 number used for each trading partner. Each real run adds 1 to each number. |
 | `SubmissionBatch` | One row for each generated file. It keeps the file name, control numbers, claim count, segment count and total charge. A new batch has the status `generated`. |
 | `BatchClaim` | One row for each claim in a batch, with its position in the file. |
+| `X12Document` | One retained payload per batch, including the exact complete X12 string, SHA-256 checksum, UTF-8 byte count, and creation time. |
 
-Trading partners can be maintained in Django Admin. Control numbers, batches and batch-claim snapshots are view-only there; generated history cannot be manually relabeled as payer acceptance through Admin. This is operational history, not a complete tamper-proof audit system.
+Trading partners can be maintained in Django Admin. Control numbers, batches, batch-claim snapshots, and X12 documents are view-only there; generated history cannot be manually relabeled as payer acceptance through Admin. X12 document details include the complete stored string. This is operational history, not a complete tamper-proof audit system.
+
+The archive retains the final file text, including line endings and its trailing newline. It is not an expiring staging table. Existing batches are left without a document; their exact original files cannot be reconstructed reliably from current claim data. See [X12 archive and integration handoff](docs/x12-archive.md) for migration, review, and the `restore_x12` command that recovers a stored file without regenerating it.
 
 ### Helper scripts
 
@@ -186,11 +189,12 @@ uv run python manage.py check
 uv run python manage.py test claims edi
 ```
 
-The workflow tests cover dashboard/detail rendering, dynamic capture of more than six service lines, charge aggregation, successful reference-linked claim capture, rejection of unknown reference values, and validation of CMS-1500 diagnosis pointers.
+The workflow tests cover dashboard/detail rendering, dynamic capture of more than six service lines, charge aggregation, successful reference-linked claim capture, rejection of unknown reference values, and validation of CMS-1500 diagnosis pointers. EDI tests cover generation, exact payload archival and restoration, retry conflicts, rollback behavior, and read-only Admin access.
 
 ## Database documentation
 
 - [EDI export ERD](docs/database/edi-erd.md)
+- [X12 archive, deployment review, and Jason integration handoff](docs/x12-archive.md)
 - [Janus/Vesta phased workflow](docs/server-workflow.md)
 - [SCP transfer setup, commands, and recovery](docs/server-transfer.md)
 - [Shared Vesta 837P inbox handoff](docs/server-transfer.md#shared-837p-inbox-october-5-handoff)

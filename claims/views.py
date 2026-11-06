@@ -3,11 +3,13 @@ from decimal import Decimal
 
 from django.contrib import messages
 from django.db import transaction
+from django.db.models import Q
+from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from edi import context as edi_context, validators as edi_validators
 
-from .forms import CMS1500CaptureForm, ServiceLineCaptureFormSet
+from .forms import CMS1500CaptureForm, DiagnosisCaptureFormSet, ServiceLineCaptureFormSet
 from .models import (
     Claim,
     ClaimAuditEvent,
@@ -24,18 +26,33 @@ from .models import (
     Provider,
     ReferenceDataUpdate,
     ServiceLine,
+    ServiceLineDiagnosis,
+    ServiceLineModifier,
 )
 
 
 def dashboard(request):
-    recent_claims = (
+    claims = (
         Claim.objects.select_related("patient")
         .prefetch_related("coverages__insurance_policy__payer")
-        .order_by("-created_at")[:10]
+        .order_by("-created_at", "id")
     )
+    query = request.GET.get("q", "").strip()[:150]
+    status = request.GET.get("status", "")
+    if query:
+        claims = claims.filter(Q(claim_number__icontains=query) | Q(patient__first_name__icontains=query) | Q(patient__last_name__icontains=query))
+    if status in dict(Claim.STATUS_CHOICES):
+        claims = claims.filter(status=status)
+    else:
+        status = ""
+    page = Paginator(claims, 15).get_page(request.GET.get("page"))
 
     context = {
-        "recent_claims": recent_claims,
+        "recent_claims": page.object_list,
+        "page": page,
+        "query": query,
+        "status": status,
+        "status_choices": Claim.STATUS_CHOICES,
         "claim_count": Claim.objects.count(),
         "draft_count": Claim.objects.filter(status=Claim.STATUS_DRAFT).count(),
         "ready_for_review_count": Claim.objects.filter(status=Claim.STATUS_READY_FOR_REVIEW).count(),
@@ -86,6 +103,8 @@ def claim_detail(request, claim_id):
             "diagnoses__icd10_reference",
             "service_lines__procedure_reference",
             "service_lines__rendering_provider",
+            "service_lines__diagnosis_links__diagnosis",
+            "service_lines__modifiers",
             "audit_events",
         ),
         id=claim_id,
@@ -97,52 +116,44 @@ def claim_detail(request, claim_id):
 
 
 def capture_claim(request):
-    if request.method == "POST":
-        form = CMS1500CaptureForm(request.POST)
-        form_is_valid = form.is_valid()
-        service_line_formset = ServiceLineCaptureFormSet(
-            request.POST,
-            prefix="service_lines",
-            form_kwargs={"valid_diagnosis_orders": _entered_diagnosis_orders(form.cleaned_data)},
-        )
-        service_lines_are_valid = service_line_formset.is_valid()
-
-        if form_is_valid and service_lines_are_valid:
-            service_line_data = [
-                service_line_form.cleaned_data
-                for service_line_form in service_line_formset
-                if service_line_form.cleaned_data and not service_line_form.cleaned_data.get("DELETE")
+    data = request.POST if request.method == "POST" else None
+    form = CMS1500CaptureForm(data)
+    diagnosis_formset = DiagnosisCaptureFormSet(data, prefix="diagnoses")
+    diagnosis_choices = []
+    if data is not None:
+        diagnoses_valid = diagnosis_formset.is_valid()
+        for index, diagnosis_form in enumerate(diagnosis_formset):
+            cleaned = diagnosis_form.cleaned_data
+            if cleaned.get("diagnosis_code") and not cleaned.get("DELETE"):
+                code = cleaned["diagnosis_code"]
+                reference = Icd10Code.objects.filter(code=code).first()
+                description = cleaned.get("description") or (reference.short_description if reference else "")
+                diagnosis_choices.append((str(index), f"{code} — {description}" if description else code))
+    service_line_formset = ServiceLineCaptureFormSet(
+        data, prefix="service_lines", form_kwargs={"diagnosis_choices": diagnosis_choices},
+    )
+    if data is not None:
+        form_valid = form.is_valid()
+        lines_valid = service_line_formset.is_valid()
+        if form_valid and diagnoses_valid and lines_valid:
+            diagnoses = [
+                {**f.cleaned_data, "row_key": str(index)}
+                for index, f in enumerate(diagnosis_formset)
+                if f.cleaned_data and not f.cleaned_data.get("DELETE")
             ]
-            claim = _save_capture_form(form.cleaned_data, service_line_data)
+            lines = [f.cleaned_data for f in service_line_formset if f.cleaned_data and not f.cleaned_data.get("DELETE")]
+            claim = _save_capture_form(form.cleaned_data, lines, diagnoses)
             messages.success(request, f"Claim {claim.claim_number or claim.id} was captured successfully.")
             return redirect("claims:claim_detail", claim_id=claim.id)
-    else:
-        form = CMS1500CaptureForm()
-        service_line_formset = ServiceLineCaptureFormSet(
-            prefix="service_lines",
-            form_kwargs={"valid_diagnosis_orders": set()},
-        )
-
-    capture_has_errors = request.method == "POST" and (
-        bool(form.errors) or service_line_formset.total_error_count() > 0
-    )
-    return render(
-        request,
-        "claims/capture_claim.html",
-        {
-            "form": form,
-            "service_line_formset": service_line_formset,
-            "capture_has_errors": capture_has_errors,
-        },
-    )
-
-
-def _entered_diagnosis_orders(data):
-    return {index for index in range(1, 5) if data.get(f"diagnosis_code_{index}")}
+    return render(request, "claims/capture_claim.html", {
+        "form": form, "diagnosis_formset": diagnosis_formset,
+        "service_line_formset": service_line_formset,
+        "capture_has_errors": data is not None,
+    })
 
 
 @transaction.atomic
-def _save_capture_form(data, service_line_data):
+def _save_capture_form(data, service_line_data, diagnosis_data):
     patient = Patient.objects.create(
         first_name=data["patient_first_name"],
         middle_name=data.get("patient_middle_name", ""),
@@ -177,6 +188,11 @@ def _save_capture_form(data, service_line_data):
             last_name=data.get("insured_last_name", ""),
             date_of_birth=data.get("insured_date_of_birth"),
             sex=data.get("insured_sex", ""),
+            address_line_1=data.get("insured_address_line_1", ""),
+            address_line_2=data.get("insured_address_line_2", ""),
+            city=data.get("insured_city", ""),
+            state=data.get("insured_state", ""),
+            zip_code=data.get("insured_zip_code", ""),
         )
 
     payer = Payer.objects.create(
@@ -266,24 +282,19 @@ def _save_capture_form(data, service_line_data):
             provider_role=ClaimProvider.ROLE_RENDERING,
         )
 
-    for index in range(1, 5):
-        code = data.get(f"diagnosis_code_{index}")
-        if code:
-            icd10_reference = Icd10Code.objects.filter(code=code, is_active=True).first()
-            ClaimDiagnosis.objects.create(
-                claim=claim,
-                diagnosis_code=code,
-                icd10_reference=icd10_reference,
-                diagnosis_order=index,
-                description=(
-                    data.get(f"diagnosis_description_{index}", "")
-                    or (icd10_reference.short_description if icd10_reference else "")
-                ),
-            )
+    diagnoses_by_key = {}
+    for index, diagnosis in enumerate(diagnosis_data, start=1):
+        code = diagnosis["diagnosis_code"]
+        reference = Icd10Code.objects.filter(code=code, is_active=True).first()
+        diagnoses_by_key[diagnosis["row_key"]] = ClaimDiagnosis.objects.create(
+            claim=claim, diagnosis_code=code, icd10_reference=reference,
+            diagnosis_order=index,
+            description=diagnosis.get("description") or (reference.short_description if reference else ""),
+        )
 
     for line in service_line_data:
         procedure_code = line["procedure_code"]
-        ServiceLine.objects.create(
+        service_line = ServiceLine.objects.create(
             claim=claim,
             service_from_date=line.get("service_line_from_date"),
             service_to_date=line.get("service_line_to_date"),
@@ -291,17 +302,14 @@ def _save_capture_form(data, service_line_data):
             procedure_code=procedure_code,
             procedure_reference=ProcedureCode.objects.filter(code=procedure_code, is_active=True).first(),
             rendering_provider=rendering_provider,
-            modifier_1=line.get("modifier_1", ""),
-            modifier_2=line.get("modifier_2", ""),
-            modifier_3=line.get("modifier_3", ""),
-            modifier_4=line.get("modifier_4", ""),
-            diagnosis_pointer_1=line.get("diagnosis_pointer_1"),
-            diagnosis_pointer_2=line.get("diagnosis_pointer_2"),
-            diagnosis_pointer_3=line.get("diagnosis_pointer_3"),
-            diagnosis_pointer_4=line.get("diagnosis_pointer_4"),
             charge_amount=line.get("charge_amount") or 0,
             units=line.get("units") or 1,
         )
+
+        for position, row_key in enumerate(line["diagnosis_refs"], start=1):
+            ServiceLineDiagnosis.objects.create(service_line=service_line, diagnosis=diagnoses_by_key[row_key], position=position)
+        for position, code in enumerate(line["modifier_codes"], start=1):
+            ServiceLineModifier.objects.create(service_line=service_line, code=code, position=position)
 
     ClaimAuditEvent.objects.create(
         claim=claim,

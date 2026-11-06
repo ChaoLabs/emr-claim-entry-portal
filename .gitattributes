@@ -1,0 +1,2 @@
+# Keep the synthetic remittance fixture byte-for-byte, including CRLF endings.
+edi/tests/fixtures/*.835 -text -diff

@@ -16,6 +16,8 @@ from .models import (
     Provider,
     ReferenceDataUpdate,
     ServiceLine,
+    ServiceLineDiagnosis,
+    ServiceLineModifier,
 )
 
 
@@ -37,6 +39,8 @@ class ClaimDiagnosisInline(admin.TabularInline):
 class ServiceLineInline(admin.TabularInline):
     model = ServiceLine
     extra = 0
+    fields = ("procedure_code", "service_from_date", "charge_amount", "units")
+    show_change_link = True
 
 
 class ClaimAuditEventInline(admin.TabularInline):
@@ -213,8 +217,30 @@ class ClaimDiagnosisAdmin(admin.ModelAdmin):
     ordering = ("claim", "diagnosis_order")
 
 
+class ServiceLineDiagnosisInline(admin.TabularInline):
+    model = ServiceLineDiagnosis
+    extra = 0
+    fields = ("position", "diagnosis")
+
+    def get_formset(self, request, obj=None, **kwargs):
+        formset = super().get_formset(request, obj, **kwargs)
+        # A diagnosis can be reused on other service lines of this same claim.
+        formset.form.base_fields["diagnosis"].queryset = (
+            ClaimDiagnosis.objects.filter(claim_id=obj.claim_id)
+            if obj else ClaimDiagnosis.objects.none()
+        )
+        return formset
+
+
+class ServiceLineModifierInline(admin.TabularInline):
+    model = ServiceLineModifier
+    extra = 0
+    fields = ("position", "code")
+
+
 @admin.register(ServiceLine)
 class ServiceLineAdmin(admin.ModelAdmin):
+    inlines = [ServiceLineDiagnosisInline, ServiceLineModifierInline]
     list_display = (
         "claim",
         "service_from_date",

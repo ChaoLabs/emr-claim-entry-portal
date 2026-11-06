@@ -46,7 +46,7 @@ describes the earlier integration, not the current table count.
 - Move the original segment tests to isolated Django tests, preserving the
   old helper entry point. Add envelope, command, failure-path, batch-order,
   context, read-only Admin and UI tests.
-- Add read-only Claim Detail export checks; no public generation/submission action.
+- Add Claim Detail export checks. The November workflow adds authenticated staff generation/download, while actual transfer remains separate.
 - Make generated records view-only in Admin. This does not make database history
   immutable against privileged operators.
 - Archive the exact final UTF-8 file contents, including its trailing newline,
@@ -67,11 +67,11 @@ is clinically valid, a payer accepted it, or money was paid.
 
 The exporter supports one primary coverage per claim. It has no 2320/2330 COB,
 999/277CA handling, payer companion-guide certification, Rust API client,
-FHIR import or 835 reconciliation. Exact original payload storage and the
-manually invoked SCP transport are implemented. Archiving a file is not evidence
-of transfer or payer acceptance; transport receipts remain a separate record.
-Dashboard-triggered generation and the JSON interface with Jason remain to be
-agreed and integrated.
+FHIR import, or full financial reconciliation. Staff generation/download, exact
+payload storage, manually invoked SCP transport, completed-835 retrieval, and
+835 import/viewing are implemented. Archiving a file is not evidence of transfer
+or payer acceptance; transport receipts remain separate. A JSON generator
+interface with Jason and live engine integration remain to be agreed.
 Some source defaults (such as signature/assignment codes and demographic
 relationship inference) still require business-rule review.
 The development reference subset is not an authoritative production dataset.
@@ -82,8 +82,17 @@ CLM claims. Do not call a multi-claim file a single adjudication request. Use
 `--claim CLM-TEST-003` for the first fictional single-claim trial, and confirm
 Tim's input contract before adding a splitter or API client.
 
+## November relationship and return changes
+
+`ServiceLineDiagnosis` and `ServiceLineModifier` replace fixed scalar columns. The capture model can retain more than four entries, while the current `005010X222A1` encoder rejects more than four pointers/modifiers per line or more than twelve claim diagnoses. The serializer guard also applies when diagnostic CLI flags skip ordinary readiness checks; overflow is never silently dropped.
+
+Returned 835 files are archived independently of submitted 837P documents. The bounded importer checks the supported envelope and transaction structure and stores exact text. The viewer displays reported CLP/SVC/CAS amounts; it is not a full X12 compliance validator, fraud finding, or proof of settled payment. It links claims by exact CLP01/claim-number match and leaves unmatched results visible. Tim's actual sample and the approved handoff contract still need a joint test.
+
 ## Reference checks used in this integration
 
+- [X12 diagnosis count and service-line pointers, RFI 1882](https://x12.org/resources/requests-for-interpretation/rfi-1882-icd10-837)
+- [X12 duplicate diagnosis pointers, RFI 1366](https://x12.org/resources/requests-for-interpretation/rfi-1366-sv107-duplicate-pointers)
+- [CMS claim-field instructions and modifiers](https://www.cms.gov/outreach-and-education/mln/wbt/mln4462429-mln-wbt-1500/1500/lesson05/04/index.html)
 - [X12 ST02 uniqueness interpretation for 5010 837](https://x12.org/resources/requests-for-interpretation/rfi-1139-st02-tr-control-number)
 - [CMS 837P companion guide](https://www.cms.gov/Medicare/Billing/ElectronicBillingEDITrans/downloads/5010A1837BCG.pdf)
 - [Health Net 837P companion guide, SBR02](https://www.healthnetoregon.com/content/dam/centene/healthnet/pdfs/provider/or/837_professional_encounters_guide.pdf)

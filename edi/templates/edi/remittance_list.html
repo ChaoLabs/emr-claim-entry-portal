@@ -1,0 +1,23 @@
+{% extends 'claims/base.html' %}
+{% block title %}835 Responses · EMRTS{% endblock %}
+{% block content %}
+{% include 'edi/_styles.html' %}
+<div class="response-head">
+    <div><h1>835 responses</h1><p>Review returned claim payments and adjustments.</p></div>
+    <a class="button" href="{% url 'edi:remittance_import' %}">Import returned file</a>
+</div>
+<section class="card">
+{% if page.object_list %}
+<div class="response-scroll"><table class="response-table">
+<thead><tr><th>Response file</th><th>Received here</th><th>Claim results</th><th>Recorded by</th></tr></thead>
+<tbody>{% for doc in page %}<tr>
+<td><a href="{% url 'edi:remittance_detail' doc.pk %}">{{ doc.source_name }}</a></td>
+<td>{{ doc.imported_at|date:'M j, Y · H:i T' }}</td><td>{{ doc.summary.claim_count }}</td><td>{{ doc.imported_by }}</td>
+</tr>{% endfor %}</tbody></table></div>
+<p class="response-meta">Page {{ page.number }} of {{ page.paginator.num_pages }}{% if page.has_previous %} · <a href="?page={{ page.previous_page_number }}">Previous</a>{% endif %}{% if page.has_next %} · <a href="?page={{ page.next_page_number }}">Next</a>{% endif %}</p>
+{% else %}
+<div class="response-empty"><h2>No returned files yet</h2><p>Retrieve the completed 835 from the processing server, then import it here.<br>The portal does not poll the server or create a payer response.</p></div>
+{% endif %}
+</section>
+<p class="response-meta">Imported responses are retained as received. A response describes reported payments; it does not confirm that funds have settled.</p>
+{% endblock %}

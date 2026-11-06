@@ -1,374 +1,133 @@
 {% extends "claims/base.html" %}
-
 {% block title %}Claim Detail | EMRTS Claim Entry Portal{% endblock %}
-
 {% block content %}
 <style>
-    .detail-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 16px;
-        margin-bottom: 22px;
-    }
-
-    .detail-section {
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 18px;
-        background: #ffffff;
-        margin-bottom: 20px;
-    }
-
-    .detail-section h3 {
-        margin: 0 0 14px;
-        color: var(--primary);
-        font-size: 18px;
-    }
-
-    .field-row {
-        margin-bottom: 8px;
-    }
-
-    .field-label {
-        font-weight: 700;
-        color: var(--muted);
-        display: inline-block;
-        min-width: 160px;
-    }
-
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 10px;
-    }
-
-    th,
-    td {
-        padding: 10px;
-        border-bottom: 1px solid var(--border);
-        text-align: left;
-        vertical-align: top;
-    }
-
-    th {
-        color: var(--muted);
-        font-weight: 700;
-    }
-
-    .status-pill {
-        display: inline-block;
-        padding: 4px 9px;
-        border-radius: 999px;
-        background: #eef4fb;
-        color: var(--primary);
-        font-weight: 700;
-        font-size: 12px;
-        white-space: nowrap;
-    }
-
-    .reference-match {
-        background: #e8f5ee;
-        color: var(--success);
-    }
-
-    .reference-unmatched {
-        background: #fff7e6;
-        color: var(--warning);
-    }
-
-    .table-wrap {
-        overflow-x: auto;
-    }
-
-    .actions {
-        margin-top: 22px;
-        display: flex;
-        gap: 14px;
-        align-items: center;
-    }
+.claim-review { color:var(--text); }
+.review-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:24px; margin-bottom:28px; }
+.review-breadcrumb { display:flex; align-items:center; gap:10px; font-size:12px; color:var(--muted); margin-bottom:20px; }
+.review-breadcrumb a { color:var(--muted); text-decoration:none; }
+.review-eyebrow { font-size:10px; letter-spacing:.13em; text-transform:uppercase; color:var(--primary); font-weight:700; margin:0 0 8px; }
+.review-heading h2 { margin:0 0 8px; font-size:30px; line-height:1.15; letter-spacing:-.8px; }
+.review-heading p { color:var(--muted); font-size:14px; margin:0; max-width:610px; }
+.review-actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding-top:4px; }
+.review-secondary { display:inline-flex; align-items:center; justify-content:center; font:inherit; font-size:13px; color:var(--text); border:1px solid var(--border); border-radius:5px; padding:10px 14px; background:white; text-decoration:none; cursor:pointer; }
+.review-sheet { background:white; border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+.review-sheet-header { display:flex; justify-content:space-between; gap:20px; align-items:center; padding:24px 28px; border-bottom:1px solid var(--border); }
+.review-sheet-header h3 { margin:0 0 5px; font-size:18px; letter-spacing:-.2px; }
+.review-sheet-header p { margin:0; color:var(--muted); font-size:12px; }
+.review-state { display:inline-flex; align-items:center; padding:5px 9px; border:1px solid #cce2e8; background:#f0f8fa; color:var(--primary); border-radius:4px; font-size:11px; font-weight:600; white-space:nowrap; }
+.review-facts { display:grid; grid-template-columns:1.3fr 1fr 1fr 1fr; background:#fbfcfd; border-bottom:1px solid var(--border); margin:0; }
+.review-facts>div { padding:18px 28px; border-right:1px solid var(--border); }
+.review-facts>div:last-child { border:0; }
+.review-facts dt { color:var(--muted); font-size:10px; letter-spacing:.07em; text-transform:uppercase; margin-bottom:7px; }
+.review-facts dd { margin:0; font-size:13px; font-weight:600; }
+.review-facts .review-total { font-size:21px; letter-spacing:-.4px; font-variant-numeric:tabular-nums; }
+.review-section { padding:26px 28px; border-bottom:1px solid var(--border); }
+.review-section:last-child { border-bottom:0; }
+.review-section-heading { display:flex; align-items:baseline; gap:13px; margin-bottom:17px; }
+.review-section-heading>span { font-size:10px; color:var(--primary); font-weight:600; }
+.review-section-heading h3 { margin:0; font-size:15px; font-weight:650; letter-spacing:-.1px; }
+.review-section-heading .review-caption { margin-left:auto; font-size:11px; color:var(--muted); }
+.review-data { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px 30px; margin:0; }
+.review-data dt { margin:0 0 5px; color:var(--muted); font-size:11px; }
+.review-data dd { margin:0; font-size:13px; line-height:1.6; overflow-wrap:anywhere; }
+.review-data .wide { grid-column:span 2; }
+.review-table-wrap { overflow-x:auto; }
+.review-table { width:100%; border-collapse:collapse; margin:0; font-size:12px; }
+.review-table caption { text-align:left; color:var(--muted); font-size:12px; padding:0 0 15px; }
+.review-table th { text-align:left; font-size:10px; font-weight:600; color:var(--muted); letter-spacing:.04em; padding:10px 12px; background:#f7f9fa; border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
+.review-table td { padding:16px 12px; border-bottom:1px solid #e9eef1; vertical-align:top; line-height:1.6; }
+.review-table tbody tr:last-child td { border-bottom:0; }
+.review-table .numeric { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.review-table .nowrap { white-space:nowrap; }
+.review-table .code { font-weight:650; letter-spacing:.02em; }
+.review-table tfoot td { border-top:1px solid var(--border); font-weight:600; padding:14px 12px; background:#fbfcfd; }
+.review-code-list { list-style:none; padding:0; margin:0; min-width:180px; }
+.review-code-list li+li { margin-top:10px; }
+.review-code-list span { display:block; color:var(--muted); font-size:11px; line-height:1.5; }
+.review-chip { display:inline-block; padding:1px 5px; border:1px solid #dce6eb; color:#435c66; border-radius:3px; margin:0 3px 3px 0; font-size:11px; }
+.review-match { color:#327261; font-size:10px; display:block; margin-top:4px; }
+.review-unmatched { color:var(--muted); font-size:10px; display:block; margin-top:4px; }
+.review-coverage+ .review-coverage { padding-top:22px; margin-top:22px; border-top:1px solid var(--border); }
+.review-coverage-title { display:flex; gap:12px; align-items:center; margin:0 0 18px; }
+.review-coverage-title h4 { margin:0; font-size:13px; }
+.review-check { margin-top:22px; border:1px solid var(--border); border-radius:6px; background:#fff; padding:22px 28px; }
+.review-check-heading { display:flex; align-items:center; justify-content:space-between; gap:20px; }
+.review-check h3 { font-size:15px; margin:0 0 5px; }
+.review-check p { font-size:12px; color:var(--muted); margin:0; line-height:1.6; }
+.review-check ul { margin:14px 0 0; padding:14px 14px 14px 30px; background:#fffaf1; color:#81581e; border-radius:4px; font-size:12px; line-height:1.8; }
+.review-audit { margin-top:22px; padding:0 2px; }
+.review-audit summary { font-size:12px; font-weight:600; cursor:pointer; color:var(--muted); padding:8px 0; }
+.review-audit .review-table-wrap { background:white; border:1px solid var(--border); margin-top:10px; border-radius:4px; }
+.review-print-note { display:none; }
+@media(max-width:900px) { .review-heading { flex-direction:column; gap:15px; } .review-facts { grid-template-columns:1fr 1fr; } .review-facts>div:nth-child(2) { border:0; } .review-data { grid-template-columns:1fr 1fr; } }
+@media(max-width:600px) { .review-section,.review-sheet-header,.review-check { padding:20px 16px; } .review-facts>div { padding:16px; } .review-data { grid-template-columns:1fr; } .review-data .wide { grid-column:auto; } .review-check-heading { align-items:flex-start; flex-direction:column; gap:12px; } .review-sheet-header { flex-wrap:wrap; } .review-section-heading .review-caption { display:none; } }
+@media print { @page { size:landscape; margin:12mm; } body { background:white; font-size:10pt; } body>header,body>nav,body>footer,.app-header,.app-sidebar,.app-nav,.site-header,.site-nav,.site-footer,.workspace-sidebar,.workspace-bar,.workspace-footer,.skip-link,.review-breadcrumb,.review-actions,.review-check,.review-audit,.messages,.no-print { display:none!important; } .workspace-body { margin:0!important; padding:0!important; } main,.app-main,.workspace-main { margin:0!important; padding:0!important; max-width:none!important; width:100%!important; } .review-heading { margin-bottom:14px; } .review-heading h2 { font-size:23px; } .review-sheet { border:0; } .review-section { padding:18px 0; break-inside:avoid; } .review-sheet-header { padding:12px 0; } .review-facts>div { padding:12px; } .review-table-wrap { overflow:visible; } .review-table { font-size:9px; } .review-table th,.review-table td { padding:7px; } .review-print-note { display:block; font-size:10px; color:#666; margin-top:16px; } }
 </style>
-
-<div class="card">
-    <h2 class="page-title">Claim Detail</h2>
-    <p class="page-subtitle">
-        Captured CMS-1500 claim information for development review.
-    </p>
-
-    <div class="detail-section">
-        <h3>Claim Summary</h3>
-        <div class="detail-grid">
-            <div class="field-row">
-                <span class="field-label">Claim Number:</span>
-                {{ claim.claim_number|default:claim.id }}
-            </div>
-            <div class="field-row">
-                <span class="field-label">Status:</span>
-                <span class="status-pill">{{ claim.get_status_display }}</span>
-            </div>
-            <div class="field-row">
-                <span class="field-label">Validation Status:</span>
-                {% if claim.validation_status == "reference_validated" %}
-                    <span class="status-pill reference-match">Reference validated</span>
-                {% else %}
-                    {{ claim.validation_status|default:"-" }}
-                {% endif %}
-            </div>
-            <div class="field-row">
-                <span class="field-label">Total Charge:</span>
-                ${{ claim.total_charge_amount }}
-            </div>
-            <div class="field-row">
-                <span class="field-label">Service Start:</span>
-                {{ claim.service_start_date|default:"-" }}
-            </div>
-            <div class="field-row">
-                <span class="field-label">Service End:</span>
-                {{ claim.service_end_date|default:"-" }}
-            </div>
-        </div>
-
-        {% if claim.validation_message %}
-            <p class="muted">{{ claim.validation_message }}</p>
-        {% endif %}
+<div class="claim-review">
+    <div class="review-breadcrumb"><a href="{% url 'claims:dashboard' %}">Claims</a><span aria-hidden="true">/</span><span>{{ claim.claim_number|default:claim.id }}</span></div>
+    <div class="review-heading">
+        <div><div class="review-eyebrow">Claim preparation</div><h2>Review claim</h2><p>Check the captured information and the diagnoses supporting each service before preparing the X12 file.</p></div>
+        <div class="review-actions"><button type="button" class="review-secondary" id="print-claim">Print claim</button>{% if request.user.is_staff %}<a href="{% url 'workflow:submission' claim.pk %}" class="button">Prepare 837P <span aria-hidden="true">&rarr;</span></a>{% endif %}</div>
     </div>
-
-    <div class="detail-section">
-        <h3>837P Export Readiness</h3>
-        <p>Prototype checks for 005010X222A1. Passing these checks is not payer acceptance
-            or a complete X12 compliance check.</p>
-        {% if edi_issues %}
-            <p class="status-pill reference-unmatched">Corrections needed before export</p>
-            <ul>
-                {% for issue in edi_issues %}<li>{{ issue }}</li>{% endfor %}
-            </ul>
-        {% else %}
-            <p class="status-pill reference-match">Prototype checks passed</p>
-        {% endif %}
-        <p class="muted">File generation is currently available through the
-            <code>generate_837p</code> management command. This page does not generate,
-            transmit, adjudicate, or receive an 835 response. Use fictional data only.</p>
-    </div>
-
-    <div class="detail-section">
-        <h3>Patient Information</h3>
-        <div class="detail-grid">
-            <div class="field-row"><span class="field-label">Name:</span>{{ claim.patient }}</div>
-            <div class="field-row"><span class="field-label">Date of Birth:</span>{{ claim.patient.date_of_birth|default:"-" }}</div>
-            <div class="field-row"><span class="field-label">Sex:</span>{{ claim.patient.sex|default:"-" }}</div>
-            <div class="field-row"><span class="field-label">Phone:</span>{{ claim.patient.phone_number|default:"-" }}</div>
-            <div class="field-row"><span class="field-label">City:</span>{{ claim.patient.city|default:"-" }}</div>
-            <div class="field-row"><span class="field-label">State:</span>{{ claim.patient.state|default:"-" }}</div>
-            <div class="field-row"><span class="field-label">ZIP:</span>{{ claim.patient.zip_code|default:"-" }}</div>
-        </div>
-    </div>
-
-    <div class="detail-section">
-        <h3>Coverage / Policy Information</h3>
-        {% if claim.coverages.all %}
-            <div class="table-wrap"><table>
-                <thead>
-                    <tr>
-                        <th>Sequence</th>
-                        <th>Insured / Subscriber</th>
-                        <th>Relationship</th>
-                        <th>Payer</th>
-                        <th>Payer Mailing Address</th>
-                        <th>Policy Type</th>
-                        <th>Member ID</th>
-                        <th>Group Number</th>
-                        <th>Plan Name</th>
-                        <th>Authorization</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for coverage in claim.coverages.all %}
-                        <tr>
-                            <td>{{ coverage.get_payer_sequence_display }}</td>
-                            <td>{{ coverage.insurance_policy.insured_party }}</td>
-                            <td>{{ coverage.relationship_to_patient|default:"-" }}</td>
-                            <td>{{ coverage.insurance_policy.payer.payer_name }}</td>
-                            <td>
-                                {{ coverage.insurance_policy.payer.address_line_1|default:"-" }}
-                                {% if coverage.insurance_policy.payer.address_line_2 %}<br>{{ coverage.insurance_policy.payer.address_line_2 }}{% endif %}
-                                <br>{{ coverage.insurance_policy.payer.city|default:"" }}{% if coverage.insurance_policy.payer.city and coverage.insurance_policy.payer.state %}, {% endif %}{{ coverage.insurance_policy.payer.state|default:"" }}
-                                {{ coverage.insurance_policy.payer.zip_code|default:"" }}{% if coverage.insurance_policy.payer.zip_code_extension %}-{{ coverage.insurance_policy.payer.zip_code_extension }}{% endif %}
-                            </td>
-                            <td>{{ coverage.insurance_policy.get_policy_type_display }}</td>
-                            <td>{{ coverage.insurance_policy.member_id|default:"-" }}</td>
-                            <td>{{ coverage.insurance_policy.group_number|default:"-" }}</td>
-                            <td>{{ coverage.insurance_policy.plan_name|default:"-" }}</td>
-                            <td>{{ coverage.prior_authorization_number|default:"-" }}</td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table></div>
-        {% else %}
-            <p class="muted">No coverage or payer information recorded.</p>
-        {% endif %}
-    </div>
-
-    <div class="detail-section">
-        <h3>Providers</h3>
-        {% if claim.claim_providers.all %}
-            <table>
-                <thead>
-                    <tr>
-                        <th>Role</th>
-                        <th>Provider</th>
-                        <th>NPI</th>
-                        <th>Reference Status</th>
-                        <th>Taxonomy</th>
-                        <th>Location</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for claim_provider in claim.claim_providers.all %}
-                        <tr>
-                            <td>{{ claim_provider.get_provider_role_display }}</td>
-                            <td>{{ claim_provider.provider }}</td>
-                            <td>{{ claim_provider.provider.npi|default:"-" }}</td>
-                            <td>
-                                {% if claim_provider.provider.npi_reference %}
-                                    <span class="status-pill reference-match">Reference matched</span>
-                                {% else %}
-                                    <span class="status-pill reference-unmatched">Not linked</span>
-                                {% endif %}
-                            </td>
-                            <td>{{ claim_provider.provider.taxonomy_code|default:"-" }}</td>
-                            <td>
-                                {{ claim_provider.provider.city|default:"-" }}
-                                {{ claim_provider.provider.state|default:"" }}
-                            </td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        {% else %}
-            <p class="muted">No providers recorded.</p>
-        {% endif %}
-    </div>
-
-    <div class="detail-section">
-        <h3>Diagnosis Codes</h3>
-        {% if claim.diagnoses.all %}
-            <table>
-                <thead>
-                    <tr>
-                        <th>Order</th>
-                        <th>Diagnosis Code</th>
-                        <th>Description</th>
-                        <th>Reference Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for diagnosis in claim.diagnoses.all %}
-                        <tr>
-                            <td>{{ diagnosis.diagnosis_order }}</td>
-                            <td>{{ diagnosis.diagnosis_code }}</td>
-                            <td>{{ diagnosis.description|default:"-" }}</td>
-                            <td>
-                                {% if diagnosis.icd10_reference %}
-                                    <span class="status-pill reference-match">Reference matched</span>
-                                {% else %}
-                                    <span class="status-pill reference-unmatched">Not linked</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        {% else %}
-            <p class="muted">No diagnosis codes recorded.</p>
-        {% endif %}
-    </div>
-
-    <div class="detail-section">
-        <h3>Service Lines</h3>
-        {% if claim.service_lines.all %}
-            <table>
-                <thead>
-                    <tr>
-                        <th>From</th>
-                        <th>To</th>
-                        <th>POS</th>
-                        <th>Procedure</th>
-                        <th>Reference Status</th>
-                        <th>Rendering Provider</th>
-                        <th>Modifiers</th>
-                        <th>Diagnosis Pointers</th>
-                        <th>Charge</th>
-                        <th>Units</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for line in claim.service_lines.all %}
-                        <tr>
-                            <td>{{ line.service_from_date|default:"-" }}</td>
-                            <td>{{ line.service_to_date|default:"-" }}</td>
-                            <td>{{ line.place_of_service|default:"-" }}</td>
-                            <td>{{ line.procedure_code }}</td>
-                            <td>
-                                {% if line.procedure_reference %}
-                                    <span class="status-pill reference-match">Reference matched</span>
-                                {% else %}
-                                    <span class="status-pill reference-unmatched">Not linked</span>
-                                {% endif %}
-                            </td>
-                            <td>{{ line.rendering_provider|default:"-" }}</td>
-                            <td>
-                                {{ line.modifier_1 }}
-                                {{ line.modifier_2 }}
-                                {{ line.modifier_3 }}
-                                {{ line.modifier_4 }}
-                            </td>
-                            <td>
-                                {{ line.diagnosis_pointer_1|default:"" }}
-                                {{ line.diagnosis_pointer_2|default:"" }}
-                                {{ line.diagnosis_pointer_3|default:"" }}
-                                {{ line.diagnosis_pointer_4|default:"" }}
-                            </td>
-                            <td>${{ line.charge_amount }}</td>
-                            <td>{{ line.units }}</td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        {% else %}
-            <p class="muted">No service lines recorded.</p>
-        {% endif %}
-    </div>
-
-    <div class="detail-section">
-        <h3>Audit Events</h3>
-        {% if claim.audit_events.all %}
-            <table>
-                <thead>
-                    <tr>
-                        <th>Event Type</th>
-                        <th>Description</th>
-                        <th>Changed By</th>
-                        <th>Created</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for event in claim.audit_events.all %}
-                        <tr>
-                            <td>{{ event.event_type }}</td>
-                            <td>{{ event.event_description|default:"-" }}</td>
-                            <td>{{ event.changed_by|default:"-" }}</td>
-                            <td>{{ event.created_at|date:"Y-m-d H:i" }}</td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        {% else %}
-            <p class="muted">No audit events recorded.</p>
-        {% endif %}
-    </div>
-
-    <div class="actions">
-        <a href="{% url 'claims:capture_claim' %}" class="button">Capture Another Claim</a>
-        <a href="{% url 'claims:dashboard' %}" class="muted">Back to Dashboard</a>
-    </div>
+    <article class="review-sheet" aria-label="Claim data review">
+        <div class="review-sheet-header"><div><h3>{{ claim.claim_number|default:claim.id }}</h3><p>CMS-1500 claim data &middot; Saved {{ claim.created_at|date:"M j, Y · g:i A" }}</p></div><span class="review-state">{{ claim.get_status_display }}</span></div>
+        <dl class="review-facts">
+            <div><dt>Patient</dt><dd>{{ claim.patient }}</dd></div>
+            <div><dt>Service period</dt><dd>{{ claim.service_start_date|date:"M j, Y"|default:"Not entered" }}{% if claim.service_end_date and claim.service_end_date != claim.service_start_date %}<br>to {{ claim.service_end_date|date:"M j, Y" }}{% endif %}</dd></div>
+            <div><dt>Reference checks</dt><dd>{% if claim.validation_status == "reference_validated" %}Reference validated{% else %}{{ claim.validation_status|default:"Not recorded" }}{% endif %}</dd></div>
+            <div><dt>Total charge</dt><dd class="review-total">${{ claim.total_charge_amount }}</dd></div>
+        </dl>
+        <section class="review-section">
+            <div class="review-section-heading"><span>01</span><h3>Patient information</h3></div>
+            <dl class="review-data">
+                <div><dt>Patient name</dt><dd>{{ claim.patient }}</dd></div><div><dt>Date of birth</dt><dd>{{ claim.patient.date_of_birth|date:"M j, Y"|default:"Not entered" }}</dd></div><div><dt>Sex</dt><dd>{{ claim.patient.sex|capfirst|default:"Not entered" }}</dd></div>
+                <div class="wide"><dt>Mailing address</dt><dd>{{ claim.patient.address_line_1|default:"Address not entered" }}{% if claim.patient.address_line_2 %}, {{ claim.patient.address_line_2 }}{% endif %}<br>{{ claim.patient.city }}{% if claim.patient.city and claim.patient.state %}, {% endif %}{{ claim.patient.state }} {{ claim.patient.zip_code }}</dd></div><div><dt>Phone</dt><dd>{{ claim.patient.phone_number|default:"Not entered" }}</dd></div>
+            </dl>
+        </section>
+        <section class="review-section">
+            <div class="review-section-heading"><span>02</span><h3>Coverage / Policy Information</h3></div>
+            {% for coverage in claim.coverages.all %}<div class="review-coverage">
+                <div class="review-coverage-title"><span class="review-state">{{ coverage.get_payer_sequence_display }}</span><h4>{{ coverage.insurance_policy.payer.payer_name }}</h4></div>
+                <dl class="review-data">
+                    <div><dt>Subscriber</dt><dd>{{ coverage.insurance_policy.insured_party }}</dd></div><div><dt>Relationship to patient</dt><dd>{{ coverage.relationship_to_patient|capfirst|default:"Not entered" }}</dd></div><div><dt>Member ID</dt><dd>{{ coverage.insurance_policy.member_id|default:"Not entered" }}</dd></div>
+                    {% with subscriber=coverage.insurance_policy.insured_party %}
+                    <div><dt>Subscriber date of birth</dt><dd>{{ subscriber.date_of_birth|date:"M j, Y"|default:"Not entered" }}</dd></div>
+                    <div class="wide"><dt>Subscriber mailing address</dt><dd>{{ subscriber.address_line_1|default:"Address not entered" }}{% if subscriber.address_line_2 %}, {{ subscriber.address_line_2 }}{% endif %}{% if subscriber.city or subscriber.state or subscriber.zip_code %}<br>{{ subscriber.city|default:"" }}{% if subscriber.city and subscriber.state %}, {% endif %}{{ subscriber.state|default:"" }} {{ subscriber.zip_code|default:"" }}{% endif %}</dd></div>
+                    {% endwith %}
+                    <div><dt>Plan</dt><dd>{{ coverage.insurance_policy.plan_name|default:"Not entered" }}</dd></div><div><dt>Policy type / group</dt><dd>{{ coverage.insurance_policy.get_policy_type_display }}<br>{{ coverage.insurance_policy.group_number|default:"No group entered" }}</dd></div><div><dt>Prior authorization</dt><dd>{{ coverage.prior_authorization_number|default:"Not entered" }}</dd></div>
+                    <div class="wide"><dt>Payer mailing address</dt><dd>{{ coverage.insurance_policy.payer.address_line_1|default:"Address not entered" }}{% if coverage.insurance_policy.payer.address_line_2 %}, {{ coverage.insurance_policy.payer.address_line_2 }}{% endif %}<br>{{ coverage.insurance_policy.payer.city }}{% if coverage.insurance_policy.payer.city and coverage.insurance_policy.payer.state %}, {% endif %}{{ coverage.insurance_policy.payer.state }} {{ coverage.insurance_policy.payer.zip_code }}{% if coverage.insurance_policy.payer.zip_code_extension %}-{{ coverage.insurance_policy.payer.zip_code_extension }}{% endif %}</dd></div>
+                    <div><dt>Authorization indicators</dt><dd>Benefits assigned: {{ coverage.assignment_of_benefits|yesno:"Yes,No" }}<br>Release of information: {{ coverage.release_of_information|yesno:"Yes,No" }}</dd></div>
+                </dl>
+            </div>{% empty %}<p class="muted">No coverage recorded.</p>{% endfor %}
+        </section>
+        <section class="review-section">
+            <div class="review-section-heading"><span>03</span><h3>Providers</h3></div>
+            <div class="review-table-wrap"><table class="review-table"><thead><tr><th scope="col">Role</th><th scope="col">Provider</th><th scope="col">NPI</th><th scope="col">Taxonomy</th><th scope="col">Address</th></tr></thead><tbody>
+                {% for item in claim.claim_providers.all %}<tr><td>{{ item.get_provider_role_display }}</td><td><strong>{{ item.provider }}</strong></td><td class="nowrap">{{ item.provider.npi|default:"Not entered" }}{% if item.provider.npi_reference %}<span class="review-match">Reference matched</span>{% else %}<span class="review-unmatched">Not linked</span>{% endif %}</td><td>{{ item.provider.taxonomy_code|default:"Not entered" }}</td><td>{{ item.provider.address_line_1 }}<br>{{ item.provider.city }} {{ item.provider.state }} {{ item.provider.zip_code }}</td></tr>{% empty %}<tr><td colspan="5" class="muted">No providers recorded.</td></tr>{% endfor %}
+            </tbody></table></div>
+        </section>
+        <section class="review-section">
+            <div class="review-section-heading"><span>04</span><h3>Claim diagnoses</h3><span class="review-caption">One diagnosis may support several services</span></div>
+            <div class="review-table-wrap"><table class="review-table"><thead><tr><th scope="col">No.</th><th scope="col">ICD-10-CM code</th><th scope="col">Description</th><th scope="col">Reference check</th></tr></thead><tbody>
+                {% for diagnosis in claim.diagnoses.all %}<tr><td>{{ diagnosis.diagnosis_order }}</td><td class="code">{{ diagnosis.diagnosis_code }}</td><td>{{ diagnosis.description|default:"Description not entered" }}</td><td>{% if diagnosis.icd10_reference %}<span class="review-match">Reference matched</span>{% else %}<span class="review-unmatched">Not linked</span>{% endif %}</td></tr>{% empty %}<tr><td colspan="4" class="muted">No diagnosis codes recorded.</td></tr>{% endfor %}
+            </tbody></table></div>
+        </section>
+        <section class="review-section">
+            <div class="review-section-heading"><span>05</span><h3>Service lines &amp; related diagnoses</h3></div>
+            <div class="review-table-wrap"><table class="review-table" aria-label="Service lines and their related diagnoses"><caption>Each service is linked to the diagnoses that support it, in the selected order.</caption><thead><tr><th scope="col">Line</th><th scope="col">Service date / place</th><th scope="col">Procedure / modifiers</th><th scope="col">Related diagnoses</th><th scope="col">Rendering provider</th><th scope="col" class="numeric">Units</th><th scope="col" class="numeric">Charge</th></tr></thead><tbody>
+                {% for line in claim.service_lines.all %}<tr><td>{{ forloop.counter }}</td><td class="nowrap">{{ line.service_from_date|date:"M j, Y"|default:"Date not entered" }}{% if line.service_to_date and line.service_to_date != line.service_from_date %}<br>to {{ line.service_to_date|date:"M j, Y" }}{% endif %}<br><span class="muted">Place: {{ line.place_of_service|default:"Not entered" }}</span></td><td><span class="code">{{ line.procedure_code }}</span>{% if line.procedure_reference %}<span class="review-match">Reference matched</span>{% else %}<span class="review-unmatched">Not linked</span>{% endif %}<div style="margin-top:8px">{% for modifier in line.modifiers.all %}<span class="review-chip">{{ modifier.code }}</span>{% empty %}<span class="muted">No modifiers</span>{% endfor %}</div></td><td><ol class="review-code-list">{% for link in line.diagnosis_links.all %}<li><strong>{{ link.diagnosis.diagnosis_order }} &middot; {{ link.diagnosis.diagnosis_code }}</strong><span>{{ link.diagnosis.description }}</span></li>{% empty %}<li class="muted">No diagnosis linked</li>{% endfor %}</ol></td><td>{{ line.rendering_provider|default:"Not entered" }}</td><td class="numeric">{{ line.units }}</td><td class="numeric">${{ line.charge_amount }}</td></tr>{% empty %}<tr><td colspan="7" class="muted">No service lines recorded.</td></tr>{% endfor %}
+            </tbody><tfoot><tr><td colspan="6" class="numeric">Total submitted charge</td><td class="numeric">${{ claim.total_charge_amount }}</td></tr></tfoot></table></div>
+        </section>
+        {% if request.user.is_staff %}<section class="review-section no-print"><div class="review-section-heading"><span>06</span><h3>835 responses</h3></div>{% for response in claim.remittance_claims.all %}<p><a href="{% url 'edi:remittance_detail' response.document_id %}">View imported 835 response &rarr;</a></p>{% empty %}<p class="muted" style="font-size:12px">No imported response is linked to this claim yet.</p>{% endfor %}<a href="/edi/responses/" class="review-secondary">Receive and review an 835 file</a></section>{% endif %}
+    </article>
+    <section class="review-check" aria-labelledby="export-check-heading">
+        <div class="review-check-heading"><div><h3 id="export-check-heading">837P Export Readiness</h3><p>{% if edi_issues %}Corrections needed before export{% else %}Prototype checks passed{% endif %}</p></div>{% if request.user.is_staff %}<a href="{% url 'workflow:submission' claim.pk %}" class="review-secondary">View export workflow &rarr;</a>{% endif %}</div>
+        {% if edi_issues %}<ul>{% for issue in edi_issues %}<li>{{ issue }}</li>{% endfor %}</ul>{% endif %}
+        <p style="margin-top:12px">Prototype checks for 005010X222A1. They do not establish payer acceptance or complete X12 compliance.{% if not request.user.is_staff %} Sign in through Admin to prepare an 837P file and review responses.{% endif %}</p>
+    </section>
+    <details class="review-audit"><summary>View claim history</summary><div class="review-table-wrap"><table class="review-table"><thead><tr><th scope="col">Event</th><th scope="col">Description</th><th scope="col">Changed by</th><th scope="col">Time</th></tr></thead><tbody>{% for event in claim.audit_events.all %}<tr><td>{{ event.event_type }}</td><td>{{ event.event_description|default:"—" }}</td><td>{{ event.changed_by|default:"—" }}</td><td class="nowrap">{{ event.created_at|date:"M j, Y · g:i A" }}</td></tr>{% empty %}<tr><td colspan="4" class="muted">No audit events recorded.</td></tr>{% endfor %}</tbody></table></div></details>
+    <p class="review-print-note">EMRTS &middot; Claim data review. This is a readable summary of captured data, not an official CMS-1500 paper form.</p>
 </div>
+<script>document.getElementById('print-claim').addEventListener('click', () => window.print());</script>
 {% endblock %}

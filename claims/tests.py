@@ -22,6 +22,7 @@ from .models import (
     Provider,
     ReferenceDataUpdate,
     ServiceLine,
+    ServiceLineDiagnosis,
 )
 
 
@@ -152,15 +153,15 @@ class ClaimCaptureWorkflowTests(TestCase):
             diagnosis_order=1,
             description="Low back pain, unspecified",
         )
-        ServiceLine.objects.create(
+        line = ServiceLine.objects.create(
             claim=self.claim,
             procedure_code="99213",
             procedure_reference=self.office_visit,
             place_of_service="11",
-            diagnosis_pointer_1=1,
             charge_amount=Decimal("125.00"),
             units=1,
         )
+        ServiceLineDiagnosis.objects.create(service_line=line, diagnosis=self.claim.diagnoses.get(), position=1)
         ClaimAuditEvent.objects.create(
             claim=self.claim,
             event_type="test_created",
@@ -241,10 +242,10 @@ class ClaimCaptureWorkflowTests(TestCase):
         self.assertEqual(claim.service_lines.count(), 1)
         service_line = claim.service_lines.get()
         self.assertEqual(service_line.procedure_reference, self.office_visit)
-        self.assertEqual(service_line.modifier_1, "25")
-        self.assertEqual(service_line.modifier_2, "GT")
-        self.assertEqual(service_line.modifier_3, "59")
-        self.assertEqual(service_line.modifier_4, "KX")
+        self.assertEqual(service_line.modifier_codes[0], "25")
+        self.assertEqual(service_line.modifier_codes[1], "GT")
+        self.assertEqual(service_line.modifier_codes[2], "59")
+        self.assertEqual(service_line.modifier_codes[3], "KX")
         self.assertEqual(claim.claim_providers.count(), 1)
         self.assertEqual(claim.claim_providers.get().provider.npi_reference, self.npi_reference)
         self.assertEqual(claim.audit_events.count(), 1)
@@ -278,7 +279,7 @@ class ClaimCaptureWorkflowTests(TestCase):
         self.assertEqual(claim.service_lines.count(), 7)
         self.assertEqual(claim.total_charge_amount, Decimal("280.00"))
         self.assertEqual(
-            list(claim.service_lines.order_by("created_at").values_list("modifier_1", flat=True)),
+            [line.modifier_codes[0] for line in claim.service_lines.order_by("created_at")],
             ["M1", "M2", "M3", "M4", "M5", "M6", "M7"],
         )
 
@@ -299,7 +300,7 @@ class ClaimCaptureWorkflowTests(TestCase):
         claim = Claim.objects.get(claim_number="CLM-TEST-REMOVE-001")
         self.assertEqual(claim.service_lines.count(), 1)
         self.assertEqual(claim.total_charge_amount, Decimal("75.00"))
-        self.assertEqual(claim.service_lines.get().modifier_1, "59")
+        self.assertEqual(claim.service_lines.get().modifier_codes[0], "59")
 
     def test_capture_rejects_a_duplicate_claim_number_without_partial_records(self):
         existing_claim = Claim.objects.create(
@@ -320,7 +321,7 @@ class ClaimCaptureWorkflowTests(TestCase):
     def test_capture_rejects_codes_not_in_active_reference_data(self):
         payload = self._capture_payload()
         payload["billing_provider_npi"] = "1234567890"
-        payload["diagnosis_code_1"] = "ZZZ.99"
+        payload["diagnoses-0-diagnosis_code"] = "ZZZ.99"
         payload["service_lines-0-procedure_code"] = "XXXXX"
 
         response = self.client.post(reverse("claims:capture_claim"), data=payload)
@@ -334,12 +335,12 @@ class ClaimCaptureWorkflowTests(TestCase):
 
     def test_capture_rejects_pointer_to_missing_diagnosis(self):
         payload = self._capture_payload()
-        payload["service_lines-0-diagnosis_pointer_1"] = "2"
+        payload["service_lines-0-diagnosis_refs"] = ["99"]
 
         response = self.client.post(reverse("claims:capture_claim"), data=payload)
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Diagnosis pointer must reference an entered diagnosis code")
+        self.assertContains(response, "Select a diagnosis entered on this claim")
         self.assertFalse(Claim.objects.filter(claim_number="CLM-TEST-POST-001").exists())
 
     def test_capture_requires_valid_payer_mailing_address(self):
@@ -446,14 +447,12 @@ class ClaimCaptureWorkflowTests(TestCase):
                 "claim_number": "CLM-TEST-POST-001",
                 "service_start_date": "",
                 "service_end_date": "",
-                "diagnosis_code_1": "R51.9",
-                "diagnosis_description_1": "Headache, unspecified",
-                "diagnosis_code_2": "",
-                "diagnosis_description_2": "",
-                "diagnosis_code_3": "",
-                "diagnosis_description_3": "",
-                "diagnosis_code_4": "",
-                "diagnosis_description_4": "",
+                "diagnoses-TOTAL_FORMS": "1",
+                "diagnoses-INITIAL_FORMS": "0",
+                "diagnoses-MIN_NUM_FORMS": "1",
+                "diagnoses-MAX_NUM_FORMS": "200",
+                "diagnoses-0-diagnosis_code": "R51.9",
+                "diagnoses-0-description": "Headache, unspecified",
                 "service_lines-TOTAL_FORMS": "1",
                 "service_lines-INITIAL_FORMS": "0",
                 "service_lines-MIN_NUM_FORMS": "1",
@@ -469,14 +468,8 @@ class ClaimCaptureWorkflowTests(TestCase):
             f"{prefix}-service_line_to_date": "",
             f"{prefix}-place_of_service": "11",
             f"{prefix}-procedure_code": "99213",
-            f"{prefix}-modifier_1": modifier_1,
-            f"{prefix}-modifier_2": "GT",
-            f"{prefix}-modifier_3": "59",
-            f"{prefix}-modifier_4": "KX",
-            f"{prefix}-diagnosis_pointer_1": "1",
-            f"{prefix}-diagnosis_pointer_2": "",
-            f"{prefix}-diagnosis_pointer_3": "",
-            f"{prefix}-diagnosis_pointer_4": "",
+            f"{prefix}-modifier_codes": list(dict.fromkeys([modifier_1, "GT", "59", "KX"])),
+            f"{prefix}-diagnosis_refs": ["0"],
             f"{prefix}-charge_amount": charge_amount,
             f"{prefix}-units": "1",
         }

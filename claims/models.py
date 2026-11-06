@@ -1,6 +1,7 @@
 import uuid
 
-from django.core.validators import RegexValidator
+from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator, RegexValidator
 from django.db import models
 
 
@@ -534,6 +535,17 @@ class ClaimDiagnosis(TimeStampedModel):
             models.Index(fields=["diagnosis_code"]),
         ]
 
+    def clean(self):
+        super().clean()
+        if self.pk and self.claim_id and self.service_line_links.exclude(
+            service_line__claim_id=self.claim_id
+        ).exists():
+            raise ValidationError({"claim": "A linked diagnosis cannot move to another claim."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.claim} - {self.diagnosis_order}: {self.diagnosis_code}"
 
@@ -562,15 +574,12 @@ class ServiceLine(TimeStampedModel):
         blank=True,
         related_name="rendered_service_lines",
     )
-    modifier_1 = models.CharField(max_length=10, blank=True)
-    modifier_2 = models.CharField(max_length=10, blank=True)
-    modifier_3 = models.CharField(max_length=10, blank=True)
-    modifier_4 = models.CharField(max_length=10, blank=True)
-
-    diagnosis_pointer_1 = models.PositiveIntegerField(null=True, blank=True)
-    diagnosis_pointer_2 = models.PositiveIntegerField(null=True, blank=True)
-    diagnosis_pointer_3 = models.PositiveIntegerField(null=True, blank=True)
-    diagnosis_pointer_4 = models.PositiveIntegerField(null=True, blank=True)
+    diagnoses = models.ManyToManyField(
+        ClaimDiagnosis,
+        through="ServiceLineDiagnosis",
+        related_name="service_lines",
+        blank=True,
+    )
 
     charge_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     units = models.PositiveIntegerField(default=1)
@@ -582,8 +591,80 @@ class ServiceLine(TimeStampedModel):
             models.Index(fields=["procedure_code"]),
         ]
 
+    @property
+    def diagnosis_pointers(self):
+        """Claim diagnosis numbers, in this service line's explicit order."""
+        return [link.diagnosis.diagnosis_order for link in self.diagnosis_links.all()]
+
+    @property
+    def modifier_codes(self):
+        return [modifier.code for modifier in self.modifiers.all()]
+
+    def clean(self):
+        super().clean()
+        if self.pk and self.claim_id and self.diagnosis_links.exclude(
+            diagnosis__claim_id=self.claim_id
+        ).exists():
+            raise ValidationError({"claim": "A service line with linked diagnoses cannot move to another claim."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.claim} - {self.procedure_code}"
+
+
+class ServiceLineDiagnosis(models.Model):
+    """Ordered relationship to a diagnosis belonging to the same claim."""
+
+    service_line = models.ForeignKey(ServiceLine, on_delete=models.CASCADE, related_name="diagnosis_links")
+    diagnosis = models.ForeignKey(ClaimDiagnosis, on_delete=models.RESTRICT, related_name="service_line_links")
+    position = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+
+    class Meta:
+        ordering = ["position"]
+        constraints = [
+            models.UniqueConstraint(fields=["service_line", "diagnosis"], name="unique_line_diagnosis"),
+            models.UniqueConstraint(fields=["service_line", "position"], name="unique_line_diagnosis_position"),
+            models.CheckConstraint(condition=models.Q(position__gte=1), name="line_diagnosis_position_positive"),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.service_line_id and self.diagnosis_id:
+            if self.service_line.claim_id != self.diagnosis.claim_id:
+                raise ValidationError({"diagnosis": "Choose a diagnosis from this service line's claim."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.position}. {self.diagnosis.diagnosis_code}"
+
+
+class ServiceLineModifier(models.Model):
+    """Ordered modifier values; export limits are validated at the format boundary."""
+
+    service_line = models.ForeignKey(ServiceLine, on_delete=models.CASCADE, related_name="modifiers")
+    code = models.CharField(max_length=10)
+    position = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+
+    class Meta:
+        ordering = ["position"]
+        constraints = [
+            models.UniqueConstraint(fields=["service_line", "position"], name="unique_line_modifier_position"),
+            models.UniqueConstraint(fields=["service_line", "code"], name="unique_line_modifier_code"),
+            models.CheckConstraint(condition=models.Q(position__gte=1), name="line_modifier_position_positive"),
+        ]
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.position}. {self.code}"
 
 
 class ClaimAuditEvent(models.Model):

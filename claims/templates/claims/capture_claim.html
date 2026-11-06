@@ -4,176 +4,86 @@
 
 {% block content %}
 <style>
-    .form-section {
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 18px;
-        margin-bottom: 20px;
-        background: #ffffff;
-    }
-
-    .form-section h3 {
-        margin: 0 0 14px;
-        color: var(--primary);
-        font-size: 18px;
-    }
-
-    .service-line-list {
-        display: grid;
-        gap: 16px;
-    }
-
-    .service-line-card {
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 16px;
-        background: #f8fafc;
-    }
-
-    .service-line-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        margin-bottom: 14px;
-    }
-
-    .service-line-header h4 {
-        margin: 0;
-        color: var(--primary);
-        font-size: 16px;
-    }
-
-    .service-line-error {
-        color: var(--danger);
-        margin: 0 0 12px;
-    }
-
-    .service-line-controls {
-        margin-top: 14px;
-    }
-
-    .add-service-line,
-    .remove-service-line {
-        border: 1px solid var(--primary);
-        border-radius: 6px;
-        background: #ffffff;
-        color: var(--primary);
-        cursor: pointer;
-        font: inherit;
-        font-weight: 600;
-        padding: 8px 12px;
-    }
-
-    .remove-service-line {
-        border-color: var(--danger);
-        color: var(--danger);
-        padding: 6px 10px;
-    }
-
-    .remove-service-line:disabled {
-        cursor: not-allowed;
-        opacity: 0.45;
-    }
-
-    .form-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 14px 18px;
-    }
-
-    .form-field label {
-        display: block;
-        font-weight: 600;
-        margin-bottom: 5px;
-    }
-
-    .form-field input,
-    .form-field select,
-    .form-field textarea {
-        width: 100%;
-        padding: 9px 10px;
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        font-size: 14px;
-    }
-
-    .form-field .helptext {
-        display: block;
-        color: var(--muted);
-        font-size: 12px;
-        margin-top: 4px;
-    }
-
-    .errorlist {
-        color: var(--danger);
-        margin: 6px 0;
-        padding-left: 18px;
-    }
-
-    .full-width {
-        grid-column: 1 / -1;
-    }
-
-    .form-actions {
-        margin-top: 24px;
-        display: flex;
-        gap: 12px;
-        align-items: center;
-    }
-
-    .validation-note {
-        border-left: 4px solid var(--primary);
-        background: #f1f7fd;
-        border-radius: 6px;
-        padding: 12px 14px;
-        margin-bottom: 20px;
-        color: #274c6b;
-    }
-
-    .form-error-summary {
-        border: 1px solid #f0b8b3;
-        border-left: 4px solid var(--danger);
-        background: #fff5f4;
-        border-radius: 6px;
-        padding: 14px 16px;
-        margin-bottom: 20px;
-    }
-
-    .form-error-summary h3 {
-        margin: 0 0 8px;
-        color: var(--danger);
-        font-size: 17px;
-    }
-
-    .form-error-summary ul {
-        margin: 0;
-        padding-left: 20px;
-    }
-
-    .form-error-summary a {
-        color: var(--danger);
-    }
-
-    @media (max-width: 760px) {
-        .form-grid {
-            grid-template-columns: 1fr;
-        }
-    }
+.claim-capture { color:var(--text); }
+.claim-capture .capture-breadcrumb { font-size:12px; color:var(--muted); display:flex; gap:10px; margin-bottom:20px; }
+.claim-capture .capture-breadcrumb a { color:var(--muted); text-decoration:none; }
+.claim-capture .capture-heading { display:flex; justify-content:space-between; align-items:center; gap:30px; margin-bottom:26px; }
+.claim-capture .capture-eyebrow { color:var(--primary); font-size:10px; letter-spacing:.13em; text-transform:uppercase; font-weight:700; margin-bottom:8px; }
+.claim-capture .capture-heading h2 { font-size:30px; letter-spacing:-.8px; line-height:1.2; margin:0 0 9px; }
+.claim-capture .capture-heading p { font-size:13px; color:var(--muted); margin:0; max-width:650px; }
+.claim-capture .capture-steps { display:flex; list-style:none; gap:20px; margin:0; padding:0; font-size:11px; color:var(--muted); white-space:nowrap; }
+.claim-capture .capture-steps li { display:flex; align-items:center; gap:6px; }
+.claim-capture .capture-steps span { display:inline-flex; width:21px; height:21px; justify-content:center; align-items:center; border:1px solid var(--border); border-radius:50%; font-size:10px; }
+.claim-capture .capture-steps [aria-current] { color:var(--primary); font-weight:600; }
+.claim-capture .capture-steps [aria-current] span { background:#edf7f9; border-color:#badde5; }
+.claim-capture .capture-layout { display:grid; grid-template-columns:175px minmax(0,1fr); gap:28px; align-items:start; }
+.claim-capture .capture-contents { position:sticky; top:24px; border:0; padding:6px 0; background:transparent; }
+.claim-capture .capture-contents p { color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.11em; margin:0 0 13px; }
+.claim-capture .capture-contents a { display:flex; align-items:center; gap:11px; font-size:12px; font-weight:400; color:#4e6570; text-decoration:none; padding:10px 8px; margin:0; border-left:2px solid transparent; }
+.claim-capture .capture-contents a span { font-size:10px; color:#90a2aa; }
+.claim-capture .capture-contents a:hover,.claim-capture .capture-contents a[aria-current] { background:#eaf4f7; border-color:#49a2b4; color:var(--primary); }
+.claim-capture .capture-contents .contents-note { margin:20px 8px 0; padding-top:15px; border-top:1px solid var(--border); font-size:11px; text-transform:none; letter-spacing:0; line-height:1.7; }
+.claim-capture .capture-form-body { min-width:0; }
+.claim-capture .form-section { scroll-margin-top:20px; border:1px solid var(--border); border-radius:5px; padding:27px; margin-bottom:18px; background:white; }
+.claim-capture .form-section h3 { margin:0 0 23px; font-size:16px; font-weight:650; letter-spacing:-.15px; color:var(--text); display:flex; gap:11px; align-items:baseline; }
+.claim-capture .section-number { color:var(--primary); font-size:10px; font-weight:650; }
+.claim-capture .form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px 22px; }
+.claim-capture .form-field label { display:block; font-size:11px; font-weight:600; color:#50636c; margin-bottom:7px; }
+.claim-capture .form-field input,.claim-capture .form-field select,.claim-capture .form-field textarea { width:100%; padding:10px 11px; border:1px solid #ccd8de; border-radius:4px; background:white; color:var(--text); font:inherit; font-size:13px; min-height:39px; }
+.claim-capture .form-field input[type="checkbox"] { width:15px; height:15px; min-height:auto; vertical-align:middle; accent-color:var(--primary); margin-right:5px; }
+.claim-capture .form-field input:hover,.claim-capture .form-field select:hover { border-color:#9eb6c0; }
+.claim-capture .form-field input[aria-invalid="true"],.claim-capture .form-field select[aria-invalid="true"] { border-color:var(--danger); }
+.claim-capture .helptext { display:block; font-size:11px; color:var(--muted); line-height:1.6; margin:6px 0 0; }
+.claim-capture .full-width { grid-column:1/-1; }
+.claim-capture #subscriber-details[hidden],.claim-capture #subscriber-reuse-note[hidden] { display:none; }
+.claim-capture .errorlist { font-size:12px; color:var(--danger); margin:7px 0 0; padding-left:16px; }
+.claim-capture .validation-note { font-size:12px; line-height:1.6; border:1px solid #d6e8ed; border-radius:5px; background:#f0f8fa; padding:13px 16px; margin:0 0 20px; color:#44616c; }
+.claim-capture .validation-note strong { color:var(--primary); font-weight:600; }
+.claim-capture .form-error-summary { border:1px solid #edc7c1; border-left:3px solid var(--danger); border-radius:5px; padding:18px 22px; margin-bottom:20px; background:#fff8f7; font-size:13px; }
+.claim-capture .form-error-summary h3 { margin:0 0 10px; font-size:15px; color:var(--danger); }
+.claim-capture .form-error-summary ul { margin:0; padding-left:18px; line-height:1.8; }
+.claim-capture .form-error-summary a { color:var(--danger); }
+.claim-capture .section-heading { display:flex; justify-content:space-between; align-items:center; gap:16px; }
+.claim-capture .section-heading h3 { margin:0; }
+.claim-capture .section-kicker { color:var(--muted); font-size:10px; letter-spacing:.08em; text-transform:uppercase; display:block; margin-bottom:7px; }
+.claim-capture .section-intro { font-size:12px; color:var(--muted); line-height:1.7; margin:12px 0 21px; }
+.claim-capture .text-button { background:transparent; border:0; color:var(--primary); font:inherit; font-size:11px; font-weight:600; padding:8px 3px; cursor:pointer; white-space:nowrap; }
+.claim-capture .text-button:hover { text-decoration:underline; }
+.claim-capture .text-button:disabled { opacity:.4; cursor:not-allowed; text-decoration:none; }
+.claim-capture .diagnosis-row { display:grid; grid-template-columns:24px minmax(100px,1fr) minmax(120px,1.7fr) auto; gap:15px; padding:18px 0; border-top:1px solid #e6ecef; align-items:end; }
+.claim-capture .diagnosis-number { padding:10px 0; color:var(--primary); font-size:11px; font-weight:600; }
+.claim-capture .diagnosis-row[hidden],.claim-capture .service-line-card[hidden] { display:none; }
+.claim-capture .service-line-list { display:grid; gap:20px; }
+.claim-capture .service-line-card { border:1px solid #d7e2e7; border-radius:5px; padding:22px; background:white; }
+.claim-capture .service-line-header { display:flex; align-items:center; justify-content:space-between; gap:10px; padding-bottom:17px; margin-bottom:20px; border-bottom:1px solid #e6ecef; }
+.claim-capture .service-line-header h4 { display:flex; align-items:center; gap:9px; margin:0; font-size:13px; font-weight:650; color:var(--text); }
+.claim-capture .line-marker { display:inline-flex; background:#edf7f9; border:1px solid #cee5ec; color:var(--primary); width:24px; height:24px; align-items:center; justify-content:center; border-radius:4px; font-size:11px; }
+.claim-capture .line-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.claim-capture .line-relations { display:grid; grid-template-columns:3fr 2fr; gap:25px; margin-top:23px; padding-top:22px; border-top:1px solid #e6ecef; }
+.claim-capture .relation-group { min-width:0; border:0; padding:0; margin:0; }
+.claim-capture .relation-group legend { font-size:12px; font-weight:650; padding:0; color:var(--text); }
+.claim-capture .required-note,.claim-capture .optional-note { font-size:10px; font-weight:400; color:var(--muted); margin-left:5px; }
+.claim-capture .relation-group .helptext { margin:7px 0 12px; }
+.claim-capture .repeated-row { display:flex; gap:9px; align-items:center; margin-bottom:8px; }
+.claim-capture .repeated-row input,.claim-capture .repeated-row select { flex:1; min-width:0; }
+.claim-capture [data-repeat="modifier"] input { max-width:92px; text-transform:uppercase; }
+.claim-capture .service-line-error { color:var(--danger); font-size:12px; }
+.claim-capture .service-line-controls { margin-top:18px; }
+.claim-capture .add-service-line { display:inline-flex; background:white; border:1px solid #bbd6de; color:var(--primary); padding:9px 13px; border-radius:4px; cursor:pointer; font:inherit; font-size:12px; font-weight:600; }
+.claim-capture .export-note { font-size:11px; line-height:1.7; color:var(--muted); margin:17px 0 0; }
+.claim-capture .form-actions { border-top:1px solid var(--border); padding:20px 0 0; margin-top:25px; display:flex; justify-content:flex-end; align-items:center; gap:20px; }
+.claim-capture .form-actions .muted { margin-right:auto; font-size:12px; text-decoration:none; }
+.claim-capture .form-actions p { color:var(--muted); font-size:11px; margin:0; }
+.claim-capture input:focus,.claim-capture select:focus,.claim-capture button:focus-visible,.claim-capture a:focus-visible { outline:2px solid #49a2b4; outline-offset:3px; }
+@media(max-width:1100px) { .claim-capture .capture-heading { align-items:flex-start; flex-direction:column; gap:20px; } .claim-capture .capture-layout { grid-template-columns:145px minmax(0,1fr); gap:20px; } .claim-capture .diagnosis-row { grid-template-columns:24px 1fr 1fr; } .claim-capture .remove-diagnosis { grid-column:3; justify-self:end; padding-bottom:0; } }
+@media(max-width:800px) { .claim-capture .capture-layout { display:block; } .claim-capture .capture-contents { display:none; } .claim-capture .form-section { padding:22px; } }
+@media(max-width:560px) { .claim-capture .form-grid,.claim-capture .line-grid,.claim-capture .line-relations { grid-template-columns:1fr; } .claim-capture .diagnosis-row { grid-template-columns:22px 1fr; } .claim-capture .diagnosis-row .form-field:nth-of-type(3),.claim-capture .remove-diagnosis { grid-column:2; } .claim-capture .remove-diagnosis { justify-self:start; } .claim-capture .service-line-card { padding:16px; } .claim-capture .section-heading { align-items:flex-start; } .claim-capture .capture-steps { gap:12px; font-size:10px; } .claim-capture .form-actions { flex-wrap:wrap; } .claim-capture .form-actions p { display:none; } }
 </style>
 
-<div class="card">
-    <h2 class="page-title">Capture New CMS-1500 Claim</h2>
-    <p class="page-subtitle">
-        Development form for entering core CMS-1500 professional claim information.
-        Do not enter real PHI.
-    </p>
-
-    <div class="validation-note">
-        <strong>Reference validation enabled.</strong>
-        Entered NPI, ICD-10-CM, and CPT / HCPCS values are checked against the active development reference subset before the claim is saved.
-    </div>
-
+<div class="claim-capture">
+    <div class="capture-breadcrumb"><a href="{% url 'claims:dashboard' %}">Claims</a><span aria-hidden="true">/</span><span>New claim</span></div>
+    <div class="capture-heading"><div><div class="capture-eyebrow">Claim preparation</div><h2>New claim</h2><p>Capture the patient, coverage and services. Then review the claim before preparing an 837P file.</p></div><ol class="capture-steps" aria-label="Claim preparation steps"><li aria-current="step"><span>1</span>Enter details</li><li><span>2</span>Review claim</li><li><span>3</span>Prepare 837P</li></ol></div>
+    <div class="validation-note"><strong>Development reference data.</strong> NPI, diagnosis and procedure codes are checked when you save. Use fictional patient information only.</div>
     {% if capture_has_errors %}
         <div class="form-error-summary" role="alert" aria-labelledby="form-error-heading">
             <h3 id="form-error-heading">Review the highlighted claim fields</h3>
@@ -186,6 +96,10 @@
                 {% for error in form.non_field_errors %}
                     <li>{{ error }}</li>
                 {% endfor %}
+                {% for diagnosis_form in diagnosis_formset %}
+                    {% if not diagnosis_form.DELETE.value %}{% for field in diagnosis_form.visible_fields %}{% for error in field.errors %}<li><a href="#{{ field.id_for_label }}">Diagnosis {{ forloop.parentloop.parentloop.counter }} — {{ field.label }}: {{ error }}</a></li>{% endfor %}{% endfor %}{% endif %}
+                {% endfor %}
+                {% for error in diagnosis_formset.non_form_errors %}<li>{{ error }}</li>{% endfor %}
                 {% for service_line_form in service_line_formset %}
                     {% with line_number=forloop.counter %}
                         {% for field in service_line_form.visible_fields %}
@@ -205,12 +119,35 @@
         </div>
     {% endif %}
 
-    <form method="post" novalidate>
+    <form method="post" novalidate id="capture-form">
         {% csrf_token %}
         {{ service_line_formset.management_form }}
+        {{ diagnosis_formset.management_form }}
+        <div class="capture-layout">
+            <nav class="capture-contents" aria-label="Claim form sections"><p>On this claim</p>
+                <a href="#claim-header-section"><span>01</span>Claim information</a>
+                <a href="#patient-section"><span>02</span>Patient</a>
+                <a href="#subscriber-section"><span>03</span>Subscriber</a>
+                <a href="#coverage-section"><span>04</span>Coverage</a>
+                <a href="#payer-section"><span>05</span>Payer</a>
+                <a href="#provider-section"><span>06</span>Providers</a>
+                <a href="#diagnoses-section"><span>07</span>Diagnoses</a>
+                <a href="#service-lines-section"><span>08</span>Service lines</a>
+                <p class="contents-note">Enter diagnoses once, then link them to the services they support.</p>
+            </nav>
+            <div class="capture-form-body">
 
-        <section class="form-section">
-            <h3>Patient Information</h3>
+        <section class="form-section" id="claim-header-section">
+            <h3><span class="section-number">01</span>Claim information</h3>
+            <div class="form-grid">
+                <div class="form-field">{{ form.claim_number.label_tag }}{{ form.claim_number }}{{ form.claim_number.errors }}</div>
+                <div class="form-field">{{ form.service_start_date.label_tag }}{{ form.service_start_date }}{{ form.service_start_date.errors }}</div>
+                <div class="form-field">{{ form.service_end_date.label_tag }}{{ form.service_end_date }}{{ form.service_end_date.errors }}</div>
+            </div>
+        </section>
+
+        <section class="form-section" id="patient-section">
+            <h3><span class="section-number">02</span>Patient</h3>
             <div class="form-grid">
                 <div class="form-field">{{ form.patient_first_name.label_tag }}{{ form.patient_first_name }}{{ form.patient_first_name.errors }}</div>
                 <div class="form-field">{{ form.patient_last_name.label_tag }}{{ form.patient_last_name }}{{ form.patient_last_name.errors }}</div>
@@ -226,23 +163,30 @@
             </div>
         </section>
 
-        <section class="form-section">
-            <h3>Insured / Subscriber Information</h3>
-            <div class="form-grid">
-                <div class="form-field full-width">
-                    <label>{{ form.insured_same_as_patient }} {{ form.insured_same_as_patient.label }}</label>
-                    {{ form.insured_same_as_patient.errors }}
-                </div>
+        <section class="form-section" id="subscriber-section">
+            <h3><span class="section-number">03</span>Subscriber</h3>
+            <div class="form-field">
+                <label>{{ form.insured_same_as_patient }} {{ form.insured_same_as_patient.label }}</label>
+                {{ form.insured_same_as_patient.errors }}
+            </div>
+            <p id="subscriber-reuse-note" class="helptext" hidden>The patient's name, date of birth and address will also be used for the subscriber.</p>
+            <div id="subscriber-details" class="form-grid" style="margin-top:20px">
+                <p class="helptext full-width" style="margin:0">When the subscriber is someone else, enter their name, date of birth and mailing address.</p>
                 <div class="form-field">{{ form.insured_first_name.label_tag }}{{ form.insured_first_name }}{{ form.insured_first_name.errors }}</div>
                 <div class="form-field">{{ form.insured_last_name.label_tag }}{{ form.insured_last_name }}{{ form.insured_last_name.errors }}</div>
                 <div class="form-field">{{ form.insured_middle_name.label_tag }}{{ form.insured_middle_name }}{{ form.insured_middle_name.errors }}</div>
                 <div class="form-field">{{ form.insured_date_of_birth.label_tag }}{{ form.insured_date_of_birth }}{{ form.insured_date_of_birth.errors }}</div>
                 <div class="form-field">{{ form.insured_sex.label_tag }}{{ form.insured_sex }}{{ form.insured_sex.errors }}</div>
+                <div class="form-field full-width">{{ form.insured_address_line_1.label_tag }}{{ form.insured_address_line_1 }}{{ form.insured_address_line_1.errors }}</div>
+                <div class="form-field full-width">{{ form.insured_address_line_2.label_tag }}{{ form.insured_address_line_2 }}{{ form.insured_address_line_2.errors }}</div>
+                <div class="form-field">{{ form.insured_city.label_tag }}{{ form.insured_city }}{{ form.insured_city.errors }}</div>
+                <div class="form-field">{{ form.insured_state.label_tag }}{{ form.insured_state }}{{ form.insured_state.errors }}</div>
+                <div class="form-field">{{ form.insured_zip_code.label_tag }}{{ form.insured_zip_code }}<span class="helptext">Use a 5-digit ZIP or ZIP+4, such as 27701-1234.</span>{{ form.insured_zip_code.errors }}</div>
             </div>
         </section>
 
-        <section class="form-section">
-            <h3>Coverage / Policy Information</h3>
+        <section class="form-section" id="coverage-section">
+            <h3><span class="section-number">04</span>Coverage</h3>
             <div class="form-grid">
                 <div class="form-field">{{ form.relationship_to_patient.label_tag }} {{ form.relationship_to_patient }} {{ form.relationship_to_patient.errors }}</div>
                 <div class="form-field">{{ form.insured_id_number.label_tag }} {{ form.insured_id_number }} {{ form.insured_id_number.errors }}</div>
@@ -262,8 +206,8 @@
             </div>
         </section>
 
-        <section class="form-section">
-            <h3>Payer Information</h3>
+        <section class="form-section" id="payer-section">
+            <h3><span class="section-number">05</span>Payer</h3>
             <div class="form-grid">
                 <div class="form-field">{{ form.payer_name.label_tag }}{{ form.payer_name }}{{ form.payer_name.errors }}</div>
                 <div class="form-field">{{ form.payer_type.label_tag }}{{ form.payer_type }}{{ form.payer_type.errors }}</div>
@@ -278,8 +222,8 @@
             </div>
         </section>
 
-        <section class="form-section">
-            <h3>Provider Information</h3>
+        <section class="form-section" id="provider-section">
+            <h3><span class="section-number">06</span>Providers</h3>
             <div class="form-grid">
                 <div class="form-field full-width">{{ form.billing_provider_name.label_tag }}{{ form.billing_provider_name }}{{ form.billing_provider_name.errors }}</div>
                 <div class="form-field">{{ form.billing_provider_npi.label_tag }}{{ form.billing_provider_npi }}{% if form.billing_provider_npi.help_text %}<span class="helptext">{{ form.billing_provider_npi.help_text }}</span>{% endif %}{{ form.billing_provider_npi.errors }}</div>
@@ -295,37 +239,24 @@
             </div>
         </section>
 
-        <section class="form-section">
-            <h3>Claim Header</h3>
-            <div class="form-grid">
-                <div class="form-field">{{ form.claim_number.label_tag }}{{ form.claim_number }}{{ form.claim_number.errors }}</div>
-                <div class="form-field">{{ form.service_start_date.label_tag }}{{ form.service_start_date }}{{ form.service_start_date.errors }}</div>
-                <div class="form-field">{{ form.service_end_date.label_tag }}{{ form.service_end_date }}{{ form.service_end_date.errors }}</div>
+        <section class="form-section" id="diagnoses-section">
+            <div class="section-heading"><div><h3><span class="section-number">07</span>Claim diagnoses</h3></div><button type="button" class="text-button" id="add-diagnosis">+ Add diagnosis</button></div>
+            <p class="muted section-intro">Enter each diagnosis once. You can then select it on any service line it supports.</p>
+            <div id="diagnosis-forms">
+            {% for diagnosis_form in diagnosis_formset %}{% include "claims/_diagnosis_form.html" with diagnosis_form=diagnosis_form diagnosis_number=forloop.counter only %}{% endfor %}
             </div>
+            <template id="empty-diagnosis-form">{% include "claims/_diagnosis_form.html" with diagnosis_form=diagnosis_formset.empty_form diagnosis_number="" only %}</template>
         </section>
 
-        <section class="form-section">
-            <h3>Diagnosis Information</h3>
-            <div class="form-grid">
-                <div class="form-field">{{ form.diagnosis_code_1.label_tag }}{{ form.diagnosis_code_1 }}{% if form.diagnosis_code_1.help_text %}<span class="helptext">{{ form.diagnosis_code_1.help_text }}</span>{% endif %}{{ form.diagnosis_code_1.errors }}</div>
-                <div class="form-field">{{ form.diagnosis_description_1.label_tag }}{{ form.diagnosis_description_1 }}{{ form.diagnosis_description_1.errors }}</div>
-                <div class="form-field">{{ form.diagnosis_code_2.label_tag }}{{ form.diagnosis_code_2 }}{{ form.diagnosis_code_2.errors }}</div>
-                <div class="form-field">{{ form.diagnosis_description_2.label_tag }}{{ form.diagnosis_description_2 }}{{ form.diagnosis_description_2.errors }}</div>
-                <div class="form-field">{{ form.diagnosis_code_3.label_tag }}{{ form.diagnosis_code_3 }}{{ form.diagnosis_code_3.errors }}</div>
-                <div class="form-field">{{ form.diagnosis_description_3.label_tag }}{{ form.diagnosis_description_3 }}{{ form.diagnosis_description_3.errors }}</div>
-                <div class="form-field">{{ form.diagnosis_code_4.label_tag }}{{ form.diagnosis_code_4 }}{{ form.diagnosis_code_4.errors }}</div>
-                <div class="form-field">{{ form.diagnosis_description_4.label_tag }}{{ form.diagnosis_description_4 }}{{ form.diagnosis_description_4.errors }}</div>
-            </div>
-        </section>
-
-        <section class="form-section">
-            <h3>Service Line Information</h3>
-            <p class="muted">Add as many service lines as needed. Each line is validated and saved separately.</p>
+        <section class="form-section" id="service-lines-section">
+            <h3><span class="section-number">08</span>Service lines</h3>
+            <p class="muted section-intro">Add the procedure, charge and related diagnoses for each service. The same diagnosis may support several lines.</p>
             <div id="service-line-forms" class="service-line-list" data-service-line-forms>
                 {% for service_line_form in service_line_formset %}
                     {% include "claims/_service_line_form.html" with line_form=service_line_form line_number=forloop.counter only %}
                 {% endfor %}
             </div>
+            <p class="muted export-note">Your complete selections are saved. The 837P export check will identify anything that exceeds the supported file format; nothing is silently omitted.</p>
             <div class="service-line-controls">
                 <button type="button" id="add-service-line" class="add-service-line">Add Service Line</button>
             </div>
@@ -335,55 +266,142 @@
         </section>
 
         <div class="form-actions">
-            <button type="submit" class="button">Save Claim</button>
             <a href="{% url 'claims:dashboard' %}" class="muted">Cancel</a>
+            <p>Next: review the saved claim as a table.</p>
+            <button type="submit" class="button">Save Claim <span aria-hidden="true">&rarr;</span></button>
+        </div>
+            </div>
         </div>
     </form>
 </div>
 
 <script>
-    (() => {
-        const container = document.getElementById("service-line-forms");
-        const addButton = document.getElementById("add-service-line");
-        const emptyFormTemplate = document.getElementById("empty-service-line-form");
-        const totalForms = document.getElementById("id_service_lines-TOTAL_FORMS");
-
-        if (!container || !addButton || !emptyFormTemplate || !totalForms) {
-            return;
-        }
-
-        const visibleServiceLines = () =>
-            Array.from(container.querySelectorAll("[data-service-line-form]")).filter((line) => !line.hidden);
-
-        const refreshServiceLines = () => {
-            const visibleLines = visibleServiceLines();
-            visibleLines.forEach((line, index) => {
-                line.querySelector("[data-service-line-number]").textContent = index + 1;
-                line.querySelector("[data-remove-service-line]").disabled = visibleLines.length === 1;
-            });
-        };
-
-        addButton.addEventListener("click", () => {
-            const formIndex = Number.parseInt(totalForms.value, 10);
-            const formHtml = emptyFormTemplate.innerHTML.replaceAll("__prefix__", String(formIndex));
-            container.insertAdjacentHTML("beforeend", formHtml);
-            totalForms.value = formIndex + 1;
-            refreshServiceLines();
+(() => {
+    const form = document.getElementById('capture-form');
+    const sameSubscriber = document.getElementById('id_insured_same_as_patient');
+    const subscriberDetails = document.getElementById('subscriber-details');
+    const subscriberReuseNote = document.getElementById('subscriber-reuse-note');
+    const subscriberRequired = new Set(['insured_first_name', 'insured_last_name', 'insured_date_of_birth', 'insured_address_line_1', 'insured_city', 'insured_state', 'insured_zip_code']);
+    const refreshSubscriber = () => {
+        subscriberDetails.hidden = sameSubscriber.checked;
+        subscriberReuseNote.hidden = !sameSubscriber.checked;
+        sameSubscriber.setAttribute('aria-expanded', String(!sameSubscriber.checked));
+        subscriberDetails.querySelectorAll('input,select').forEach(input => {
+            input.disabled = sameSubscriber.checked;
+            input.required = !sameSubscriber.checked && subscriberRequired.has(input.name);
+            input.setAttribute('aria-required', String(input.required));
         });
-
-        container.addEventListener("click", (event) => {
-            const removeButton = event.target.closest("[data-remove-service-line]");
-            if (!removeButton || visibleServiceLines().length === 1) {
-                return;
+    };
+    sameSubscriber.setAttribute('aria-controls', 'subscriber-details');
+    sameSubscriber.addEventListener('change', refreshSubscriber);
+    refreshSubscriber();
+    const diagnoses = document.getElementById('diagnosis-forms');
+    const lines = document.getElementById('service-line-forms');
+    const visible = (container, selector) => [...container.querySelectorAll(selector)].filter(row => !row.hidden);
+    const activeDiagnoses = () => visible(diagnoses, '[data-diagnosis-form]');
+    const activeLines = () => visible(lines, '[data-service-line-form]');
+    const notice = document.createElement('p');
+    notice.setAttribute('role', 'status'); notice.className = 'muted';
+    diagnoses.after(notice);
+    const getChoices = () => activeDiagnoses().flatMap((row, index) => {
+        const code = row.querySelector('[name$="-diagnosis_code"]').value.trim().toUpperCase();
+        const description = row.querySelector('[name$="-description"]').value.trim();
+        const key = row.dataset.rowKey.replace('diagnoses-', '');
+        return code ? [{ key, label: `${index + 1}. ${code}${description ? ' — ' + description : ''}` }] : [];
+    });
+    const refreshChoices = () => {
+        const choices = getChoices();
+        lines.querySelectorAll('[data-diagnosis-select]').forEach(select => {
+            const selected = select.value;
+            select.replaceChildren(new Option('Choose a diagnosis…', ''));
+            choices.forEach(({ key, label }) => select.add(new Option(label, key)));
+            if (selected && !choices.some(choice => choice.key === selected)) {
+                select.add(new Option('Diagnosis removed or empty — select again', selected));
             }
-
-            const serviceLine = removeButton.closest("[data-service-line-form]");
-            serviceLine.querySelector('input[name$="-DELETE"]').value = "on";
-            serviceLine.hidden = true;
-            refreshServiceLines();
+            select.value = selected;
         });
-
-        refreshServiceLines();
-    })();
+    };
+    const refreshValues = () => {
+        lines.querySelectorAll('[data-repeat]').forEach(group => {
+            group.querySelectorAll('[data-value-row]').forEach((row, index) => {
+                const input = row.querySelector('input,select');
+                input.id = `${group.id}_${index}`;
+                input.setAttribute('aria-label', `${group.dataset.repeat} ${index + 1}`);
+                row.querySelector('[data-remove-value]').setAttribute('aria-label', `Remove ${group.dataset.repeat} ${index + 1}`);
+            });
+        });
+    };
+    const refresh = () => {
+        form.querySelectorAll('[data-diagnosis-form], [data-service-line-form]').forEach(row => {
+            row.querySelectorAll('input,select,textarea').forEach(input => {
+                if (!input.name.endsWith('-DELETE')) input.disabled = row.hidden;
+            });
+        });
+        const diagnosisRows = activeDiagnoses(), lineRows = activeLines();
+        diagnosisRows.forEach((row, index) => {
+            row.querySelector('[data-diagnosis-number]').textContent = index + 1;
+            row.querySelector('[data-remove-diagnosis]').disabled = diagnosisRows.length === 1;
+        });
+        lineRows.forEach((row, index) => {
+            row.querySelector('[data-service-line-number]').textContent = index + 1;
+            row.querySelector('[data-remove-service-line]').disabled = lineRows.length === 1;
+        });
+        refreshChoices();
+        refreshValues();
+    };
+    const addForm = (prefix, container, templateId) => {
+        const count = document.getElementById(`id_${prefix}-TOTAL_FORMS`);
+        const index = Number(count.value);
+        if (index >= 200) { notice.textContent = 'This claim has reached the form size limit. Save it before adding more.'; return; }
+        container.insertAdjacentHTML('beforeend', document.getElementById(templateId).innerHTML.replaceAll('__prefix__', String(index)));
+        count.value = index + 1;
+        refresh();
+        container.lastElementChild.querySelector('input:not([type="hidden"]), select')?.focus();
+    };
+    document.getElementById('add-diagnosis').addEventListener('click', () => addForm('diagnoses', diagnoses, 'empty-diagnosis-form'));
+    document.getElementById('add-service-line').addEventListener('click', () => addForm('service_lines', lines, 'empty-service-line-form'));
+    diagnoses.addEventListener('input', refreshChoices);
+    form.addEventListener('click', event => {
+        const button = event.target.closest('button');
+        if (!button) return;
+        if (button.hasAttribute('data-remove-diagnosis') && activeDiagnoses().length > 1) {
+            const row = button.closest('[data-diagnosis-form]');
+            row.querySelector('[name$="-DELETE"]').value = 'on'; row.hidden = true;
+            notice.textContent = 'Diagnosis removed. Update any service line that used it before saving.';
+            refresh();
+        }
+        if (button.hasAttribute('data-remove-service-line') && activeLines().length > 1) {
+            const row = button.closest('[data-service-line-form]');
+            row.querySelector('[name$="-DELETE"]').value = 'on'; row.hidden = true; refresh();
+        }
+        if (button.hasAttribute('data-add-value')) {
+            const group = button.closest('[data-repeat]');
+            const values = group.querySelector('[data-values]');
+            if (values.children.length >= 200) { notice.textContent = 'This service line has reached the form size limit.'; return; }
+            const row = values.firstElementChild.cloneNode(true);
+            const input = row.querySelector('input,select'); input.value = '';
+            values.append(row); refreshChoices(); refreshValues(); input.focus();
+        }
+        if (button.hasAttribute('data-remove-value')) {
+            const row = button.closest('[data-value-row]');
+            if (row.parentElement.children.length === 1) row.querySelector('input,select').value = '';
+            else row.remove();
+            refreshValues();
+        }
+    });
+    if ('IntersectionObserver' in window) {
+        const sectionLinks = [...form.querySelectorAll('.capture-contents a')];
+        const observer = new IntersectionObserver(entries => {
+            const section = entries.find(entry => entry.isIntersecting);
+            if (!section) return;
+            sectionLinks.forEach(link => {
+                if (link.hash === '#' + section.target.id) link.setAttribute('aria-current', 'location');
+                else link.removeAttribute('aria-current');
+            });
+        }, { rootMargin: '-10% 0px -65% 0px' });
+        form.querySelectorAll('.form-section').forEach(section => observer.observe(section));
+    }
+    refresh();
+})();
 </script>
 {% endblock %}

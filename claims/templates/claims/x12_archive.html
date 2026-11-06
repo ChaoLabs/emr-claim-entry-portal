@@ -1,0 +1,11 @@
+{% extends 'claims/base.html' %}
+{% block title %}837P files · EMRTS{% endblock %}
+{% block content %}
+<div class="page-heading"><div><div class="eyebrow">Outgoing documents</div><h1 class="page-title">837P files</h1><p class="page-subtitle">Permanent copies of generated X12 submissions. Review or download the original.</p></div><a class="button secondary" href="{% url 'claims:dashboard' %}">Review claims</a></div>
+<section class="panel"><div class="panel-head"><h2>File archive</h2><span class="label">{{ page.paginator.count }} file{{ page.paginator.count|pluralize }}</span></div>
+{% if documents %}<div class="table-wrap"><table class="data-table" style="min-width:690px"><thead><tr><th>File</th><th>Created</th><th>Claims</th><th>Status</th><th class="money">Size</th><th>Download</th></tr></thead><tbody>{% for document in documents %}<tr><td><a class="row-link" href="{% url 'workflow:document' document.pk %}">{{ document.batch.file_name }}</a><span class="cell-secondary">ANSI X12 · 837 Professional</span></td><td>{{ document.created_at|date:'M j, Y' }}<span class="cell-secondary">{{ document.created_at|date:'H:i T' }}</span></td><td>{{ document.batch.claim_count }}</td><td><span class="badge neutral">{{ document.batch.get_status_display }}</span></td><td class="money">{{ document.byte_count|filesizeformat }}</td><td><a class="text-link" href="{% url 'workflow:download' document.pk %}" aria-label="Download {{ document.batch.file_name }}">{% include 'claims/_icon.html' with name='download' %}837P</a></td></tr>{% endfor %}</tbody></table></div>
+<div class="pagination"><span>Showing {{ page.start_index }}–{{ page.end_index }} of {{ page.paginator.count }}</span><div>{% if page.has_previous %}<a href="?page={{ page.previous_page_number }}">Previous</a>{% endif %}{% if page.has_next %}<a href="?page={{ page.next_page_number }}">Next</a>{% endif %}</div></div>
+{% else %}<div class="empty-state"><h2>No submission files yet</h2><p>Open a saved claim and choose Prepare 837P to generate its first file.</p><a class="button" href="{% url 'claims:dashboard' %}">Open claim register</a></div>{% endif %}
+</section>
+<p class="small muted" style="margin-top:20px">Generation and download do not confirm delivery. Transfer logs and returned 835 files are separate records.</p>
+{% endblock %}

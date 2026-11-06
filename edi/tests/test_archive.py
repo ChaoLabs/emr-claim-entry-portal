@@ -130,7 +130,7 @@ class X12DocumentAdminTests(TestCase):
         detail = self.client.get(reverse("admin:edi_x12document_change", args=[self.document.pk]))
         self.assertContains(detail, "SECRET_PAYLOAD")
         listing = self.client.get(reverse("admin:edi_x12document_changelist"))
-        self.assertContains(listing, self.document.sha256)
+        self.assertContains(listing, self.document.batch.file_name)
         self.assertNotContains(listing, "SECRET_PAYLOAD")
         model_admin = admin.site._registry[X12Document]
         self.assertNotIn("content", model_admin.list_display)

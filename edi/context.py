@@ -82,7 +82,7 @@ def _place_of_service(lines):
 def build(claim):
     context = ClaimContext(claim=claim)
 
-    context.service_lines = list(claim.service_lines.all())
+    context.service_lines = list(claim.service_lines.prefetch_related("diagnosis_links__diagnosis", "modifiers").all())
     context.diagnoses = list(claim.diagnoses.all().order_by("diagnosis_order"))
 
     coverages = list(claim.coverages.all())

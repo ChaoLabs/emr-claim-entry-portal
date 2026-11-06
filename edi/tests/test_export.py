@@ -15,7 +15,8 @@ from django.db import DatabaseError
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
-from claims.models import Claim, ClaimCoverage, ClaimDiagnosis, ClaimProvider
+from claims.models import (Claim, ClaimCoverage, ClaimDiagnosis, ClaimProvider,
+                           ServiceLine, ServiceLineDiagnosis, ServiceLineModifier)
 from edi import builders, context, envelope, segments, validators
 from edi.models import BatchClaim, ControlNumber, SubmissionBatch, TradingPartner, X12Document
 from tools.make_test_claims import create as create_test_claims
@@ -240,9 +241,35 @@ class ExportTests(TestCase):
         copy.pk = None
         copy.claim_number = "CLM-TEST-004"
         copy.save()
+        # Copy actual associations rather than putting another claim's lines
+        # into an artificial context; export now checks their ownership.
+        coverage = child.coverages.get()
+        coverage.pk = None
+        coverage.claim = copy
+        coverage.save()
+        for assignment in child.claim_providers.all():
+            assignment.pk = None
+            assignment.claim = copy
+            assignment.save()
+        copied_diagnoses = {}
+        for diagnosis in child.diagnoses.all():
+            order = diagnosis.diagnosis_order
+            diagnosis.pk = None
+            diagnosis.claim = copy
+            diagnosis.save()
+            copied_diagnoses[order] = diagnosis
+        for line in child.service_lines.all():
+            pointers, modifiers = line.diagnosis_pointers, line.modifier_codes
+            line.pk = None
+            line.claim = copy
+            line.save()
+            for position, pointer in enumerate(pointers, start=1):
+                ServiceLineDiagnosis.objects.create(service_line=line,
+                    diagnosis=copied_diagnoses[pointer], position=position)
+            for position, modifier in enumerate(modifiers, start=1):
+                ServiceLineModifier.objects.create(service_line=line, code=modifier, position=position)
         first = context.build(child)
-        last = context.build(child)
-        last.claim = copy
+        last = context.build(copy)
         middle = context.build(self.claim)
         with patch("edi.management.commands.generate_837p.Command.screen",
                    return_value=([first, middle, last], [], [])):

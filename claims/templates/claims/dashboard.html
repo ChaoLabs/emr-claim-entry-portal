@@ -1,189 +1,38 @@
 {% extends "claims/base.html" %}
-
-{% block title %}Dashboard | EMRTS Claim Entry Portal{% endblock %}
-
+{% block title %}Claim Entry Dashboard · EMRTS{% endblock %}
 {% block content %}
-<style>
-    .metric-grid,
-    .reference-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 16px;
-    }
-
-    .metric-card,
-    .reference-card {
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        padding: 18px;
-        background: #fff;
-    }
-
-    .metric-value {
-        font-size: 30px;
-        font-weight: 700;
-        margin-top: 6px;
-    }
-
-    .reference-section {
-        margin: 30px 0;
-        padding: 20px;
-        border: 1px solid #cbdcf0;
-        border-radius: 10px;
-        background: #f7fbff;
-    }
-
-    .reference-heading {
-        display: flex;
-        justify-content: space-between;
-        gap: 16px;
-        align-items: flex-start;
-        margin-bottom: 16px;
-    }
-
-    .reference-heading h3 {
-        margin: 0 0 4px;
-        color: var(--primary);
-    }
-
-    .reference-card strong {
-        display: block;
-        color: var(--primary);
-        font-size: 16px;
-    }
-
-    .reference-count {
-        font-size: 25px;
-        font-weight: 700;
-        margin: 10px 0 2px;
-    }
-
-    .status-pill {
-        display: inline-block;
-        padding: 4px 9px;
-        border-radius: 999px;
-        background: #e8f5ee;
-        color: var(--success);
-        font-size: 12px;
-        font-weight: 700;
-    }
-
-    .table-wrap {
-        overflow-x: auto;
-    }
-
-    @media (max-width: 760px) {
-        .metric-grid,
-        .reference-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .reference-heading {
-            display: block;
-        }
-    }
-</style>
-
-<div class="card">
-    <h2 class="page-title">Claim Entry Dashboard</h2>
-    <p class="page-subtitle">
-        Development dashboard for CMS-1500 claim capture and review.
-    </p>
-
-    <div class="metric-grid">
-        <div class="metric-card">
-            <div class="muted">Total Claims</div>
-            <div class="metric-value">{{ claim_count }}</div>
-        </div>
-
-        <div class="metric-card">
-            <div class="muted">Draft Claims</div>
-            <div class="metric-value">{{ draft_count }}</div>
-        </div>
-
-        <div class="metric-card">
-            <div class="muted">Ready for Review</div>
-            <div class="metric-value">{{ ready_for_review_count }}</div>
-        </div>
-    </div>
-
-    <div class="reference-section">
-        <div class="reference-heading">
-            <div>
-                <h3>Reference Data Readiness</h3>
-                <div class="muted">Active records available to validate CMS-1500 provider and code fields.</div>
-            </div>
-            <span class="status-pill">Development subset</span>
-        </div>
-
-        <div class="reference-grid">
-            {% for dataset in reference_data %}
-                <div class="reference-card">
-                    <strong>{{ dataset.label }}</strong>
-                    <div class="reference-count">{{ dataset.active_count }}</div>
-                    <div class="muted">active reference record{{ dataset.active_count|pluralize }}</div>
-                    {% if dataset.latest_update %}
-                        <div style="margin-top: 12px; font-size: 13px;">
-                            Version: {{ dataset.latest_update.source_version|default:"Not specified" }}<br>
-                            Refreshed (UTC): {{ dataset.latest_update.completed_at|date:"Y-m-d H:i" }}
-                        </div>
-                    {% else %}
-                        <div class="muted" style="margin-top: 12px; font-size: 13px;">No completed refresh recorded.</div>
-                    {% endif %}
-                </div>
-            {% endfor %}
-        </div>
-    </div>
-
-    <p style="margin: 0 0 28px;">
-        <a class="button" href="{% url 'claims:capture_claim' %}">Capture New CMS-1500 Claim</a>
-    </p>
-
-    <h3 style="margin-top: 32px;">Recent Claims</h3>
-
-    {% if recent_claims %}
-        <div class="table-wrap">
-        <table style="width: 100%; border-collapse: collapse; margin-top: 12px; min-width: 760px;">
-            <thead>
-                <tr style="border-bottom: 1px solid var(--border); text-align: left;">
-                    <th style="padding: 10px;">Claim Number</th>
-                    <th style="padding: 10px;">Patient</th>
-                    <th style="padding: 10px;">Payer</th>
-                    <th style="padding: 10px;">Status</th>
-                    <th style="padding: 10px;">Total Charge</th>
-                    <th style="padding: 10px;">Created</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for claim in recent_claims %}
-                    <tr style="border-bottom: 1px solid var(--border);">
-                        <td style="padding: 10px;">
-                            <a href="{% url 'claims:claim_detail' claim.id %}">
-                                {{ claim.claim_number|default:claim.id }}
-                            </a>
-                        </td>
-                        <td style="padding: 10px;">{{ claim.patient }}</td>
-                        <td style="padding: 10px;">
-                                {% for coverage in claim.coverages.all %}
-                                    {% if coverage.payer_sequence == "primary" %}
-                                        {{ coverage.insurance_policy.payer }}
-                                    {% endif %}
-                                {% empty %}
-                                    <span class="muted">Not recorded</span>
-                                {% endfor %}
-                            </td>
-                        <td style="padding: 10px;">{{ claim.get_status_display }}</td>
-                        <td style="padding: 10px;">${{ claim.total_charge_amount }}</td>
-                        <td style="padding: 10px;">{{ claim.created_at|date:"Y-m-d H:i" }}</td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        </div>
-    {% else %}
-        <p class="muted">
-            No claims have been captured yet. Use the capture form to create the first development claim.
-        </p>
-    {% endif %}
+<div class="page-heading">
+    <div><div class="eyebrow">Claim operations</div><h1 class="page-title">Claims</h1><p class="page-subtitle">Capture, review, and prepare professional claims for submission.</p></div>
+    <a class="button" href="{% url 'claims:capture_claim' %}">{% include 'claims/_icon.html' with name='plus' %}New CMS-1500 claim</a>
 </div>
+<div class="overview-metrics" aria-label="Claim overview">
+    <div class="overview-metric"><div class="metric-label">Total claims</div><div class="metric-value">{{ claim_count }}</div><div class="metric-detail">Captured in this workspace</div></div>
+    <div class="overview-metric"><div class="metric-label">Draft claims</div><div class="metric-value">{{ draft_count }}</div><div class="metric-detail">Not ready for review</div></div>
+    <div class="overview-metric"><div class="metric-label">Ready for review</div><div class="metric-value">{{ ready_for_review_count }}</div><div class="metric-detail">Review details before generating 837P</div></div>
+</div>
+<section class="panel" aria-labelledby="claims-heading">
+    <div class="panel-head"><h2 id="claims-heading">Claim register</h2><span class="label">{{ page.paginator.count }} record{{ page.paginator.count|pluralize }}</span></div>
+    <div class="table-toolbar"><form method="get" class="search-form" role="search">
+        <label class="search-input">{% include 'claims/_icon.html' with name='search' %}<input type="search" name="q" value="{{ query }}" placeholder="Claim number or patient" aria-label="Search claims"></label>
+        <select name="status" aria-label="Filter claim status"><option value="">All statuses</option>{% for value,label in status_choices %}<option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+        <button class="button secondary" type="submit">Apply</button>{% if query or status %}<a class="text-link" href="{% url 'claims:dashboard' %}">Clear</a>{% endif %}
+    </form><span class="label">Newest first</span></div>
+    {% if recent_claims %}<div class="table-wrap"><table class="data-table" style="min-width:740px">
+        <thead><tr><th>Claim / patient</th><th>Primary payer</th><th>Status</th><th class="money">Total charge</th><th>Captured</th><th><span class="label">Open</span></th></tr></thead>
+        <tbody>{% for claim in recent_claims %}<tr>
+            <td><a class="row-link" href="{% url 'claims:claim_detail' claim.id %}">{{ claim.claim_number|default:claim.id }}</a><span class="cell-secondary">{{ claim.patient }}</span></td>
+            <td>{% for coverage in claim.coverages.all %}{% if coverage.payer_sequence == 'primary' %}{{ coverage.insurance_policy.payer }}{% endif %}{% empty %}<span class="muted">Not recorded</span>{% endfor %}</td>
+            <td><span class="badge {% if claim.status == 'draft' %}neutral{% endif %}">{{ claim.get_status_display }}</span></td>
+            <td class="money">${{ claim.total_charge_amount }}</td><td><span class="nowrap">{{ claim.created_at|date:'M j, Y' }}</span><span class="cell-secondary">{{ claim.created_at|date:'H:i T' }}</span></td>
+            <td class="action-cell"><a href="{% url 'claims:claim_detail' claim.id %}" aria-label="Review {{ claim.claim_number }}">{% include 'claims/_icon.html' with name='arrow' %}</a></td>
+        </tr>{% endfor %}</tbody>
+    </table></div>
+    <div class="pagination"><span>Showing {{ page.start_index }}–{{ page.end_index }} of {{ page.paginator.count }}</span><div>{% if page.has_previous %}<a href="?page={{ page.previous_page_number }}&amp;q={{ query|urlencode }}&amp;status={{ status|urlencode }}">Previous</a>{% endif %}{% if page.has_next %}<a href="?page={{ page.next_page_number }}&amp;q={{ query|urlencode }}&amp;status={{ status|urlencode }}">Next</a>{% endif %}</div></div>
+    {% else %}<div class="empty-state"><h2>{% if query or status %}No matching claims{% else %}Your claim register starts here{% endif %}</h2><p>{% if query or status %}Try another claim number, patient name, or status.{% else %}Create a claim to review its diagnoses, services, and submission file.{% endif %}</p>{% if query or status %}<a class="text-link" href="{% url 'claims:dashboard' %}">Clear filters</a>{% else %}<a class="button" href="{% url 'claims:capture_claim' %}">Create first claim</a>{% endif %}</div>{% endif %}
+</section>
+<details class="reference-disclosure">
+    <summary>Reference Data Readiness <span class="badge neutral">Development subset</span></summary>
+    <div class="reference-grid">{% for dataset in reference_data %}<section class="reference-item"><h3>{{ dataset.label }}</h3><div><span class="reference-count">{{ dataset.active_count }}</span><span class="label">active record{{ dataset.active_count|pluralize }}</span></div>{% if dataset.latest_update %}<p>Version {{ dataset.latest_update.source_version|default:'Not specified' }}<br>Refreshed {{ dataset.latest_update.completed_at|date:'M j, Y · H:i T' }}</p>{% else %}<p>No completed refresh recorded.</p>{% endif %}</section>{% endfor %}</div>
+    <p class="small muted" style="margin:18px 24px 0">The development subset is used for validation. It is not the complete provider or code registry.</p>
+</details>
 {% endblock %}

@@ -4,7 +4,8 @@ Read only. Never writes to the claims tables.
 One row per service line.
 
 Every value and every check comes from the edi package, so the CSV and the
-generated 837P cannot disagree.
+generated 837P cannot disagree. All captured diagnoses/modifiers are included
+as JSON arrays; unrepresentable wire composites are empty and flagged.
 
 Usage:
     python tools/export_claims_csv.py
@@ -14,6 +15,7 @@ Usage:
 
 import argparse
 import csv
+import json
 import os
 import sys
 from pathlib import Path
@@ -64,10 +66,9 @@ COLUMNS = [
     "2010BB_N401_city",
     "2010BB_N402_state",
     "2010BB_N403_zip",
-    "HI_01",
-    "HI_02",
-    "HI_03",
-    "HI_04",
+    "HI_diagnoses_json",
+    "captured_modifiers_json",
+    "captured_diagnosis_pointers_json",
     "LX01_line_number",
     "2400_SV101_procedure",
     "2400_SV102_charge",
@@ -123,10 +124,7 @@ def base_row(ctx):
         "2010BB_N401_city": formatters.clean(ctx.payer.city),
         "2010BB_N402_state": formatters.clean(ctx.payer.state),
         "2010BB_N403_zip": builders.payer_postal_code(ctx.payer),
-        "HI_01": hi[0] if len(hi) > 0 else "",
-        "HI_02": hi[1] if len(hi) > 1 else "",
-        "HI_03": hi[2] if len(hi) > 2 else "",
-        "HI_04": hi[3] if len(hi) > 3 else "",
+        "HI_diagnoses_json": json.dumps(hi),
     }
 
 
@@ -136,27 +134,37 @@ def build_rows(ctx, issues):
 
     rows = []
     for number, line in enumerate(ctx.service_lines, start=1):
-        segments = builders.service_line_loop(ctx, line, number)
-        sv1 = next(s for s in segments if s.segment_id == "SV1")
-        dtp = next(s for s in segments if s.segment_id == "DTP")
+        # A review CSV retains every captured relationship even when this
+        # selection cannot be represented by the selected 837P version.
+        # In that case wire composite fields remain empty, never truncated.
+        hard_issues = validators.validate_diagnoses(ctx) + validators.validate_line_relationships(ctx, line, number)
+        if hard_issues:
+            sv1 = dtp = None
+        else:
+            segments = builders.service_line_loop(ctx, line, number)
+            sv1 = next(s for s in segments if s.segment_id == "SV1")
+            dtp = next(s for s in segments if s.segment_id == "DTP")
         renderer = line.rendering_provider or ctx.rendering
 
         row = dict(base)
         row.update({
             "LX01_line_number": number,
-            "2400_SV101_procedure": sv1.element(1),
-            "2400_SV102_charge": sv1.element(2),
-            "2400_SV103_unit": sv1.element(3),
-            "2400_SV104_quantity": sv1.element(4),
-            "2400_SV105_line_pos": sv1.element(5),
-            "2400_SV107_diagnosis_pointers": sv1.element(7),
-            "2400_DTP472_service_date": dtp.element(3),
+            "captured_modifiers_json": json.dumps(line.modifier_codes),
+            "captured_diagnosis_pointers_json": json.dumps(line.diagnosis_pointers),
+            "2400_SV101_procedure": sv1.element(1) if sv1 else "",
+            "2400_SV102_charge": formatters.amount(line.charge_amount),
+            "2400_SV103_unit": codes.UNIT_BASIS_UNITS,
+            "2400_SV104_quantity": str(line.units),
+            "2400_SV105_line_pos": ctx.line_place_of_service(line),
+            "2400_SV107_diagnosis_pointers": sv1.element(7) if sv1 else "",
+            "2400_DTP472_service_date": dtp.element(3) if dtp else (formatters.rd8(line.service_from_date, line.service_to_date) or formatters.d8(line.service_from_date)),
             "2420A_NM103_rendering_last": formatters.clean(
                 renderer.last_name or renderer.organization_name) if renderer else "",
             "2420A_NM109_rendering_npi": formatters.digits(renderer.npi) if renderer else "",
         })
 
         line_issues = claim_level + [i for i in issues if i.line == number]
+        line_issues.extend(issue for issue in hard_issues if issue not in line_issues)
         row["ready_for_837p"] = "N" if line_issues else "Y"
         row["issue_count"] = len(line_issues)
         row["issues"] = " | ".join(str(i) for i in line_issues)

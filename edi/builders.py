@@ -1,4 +1,4 @@
-from . import codes, context as ctx, formatters
+from . import codes, context as ctx, formatters, validators
 from .segments import Composite, HLCounter, Segment
 
 
@@ -91,6 +91,7 @@ def patient_loop(patient, hl_id, parent_id, sbr02):
 
 
 def claim_loop(context):
+    validators.ensure_export_relationships(context)
     out = [Segment(
         "CLM",
         context.claim.claim_number,
@@ -122,13 +123,13 @@ def claim_loop(context):
 
 
 def service_line_loop(context, line, number):
+    validators.ensure_export_relationships(context, line, number)
     procedure = [codes.QUALIFIER_PROCEDURE, line.procedure_code]
-    for modifier in (line.modifier_1, line.modifier_2, line.modifier_3, line.modifier_4):
+    for modifier in line.modifier_codes:
         if modifier and modifier.strip():
             procedure.append(modifier)
 
-    pointers = [line.diagnosis_pointer_1, line.diagnosis_pointer_2,
-                line.diagnosis_pointer_3, line.diagnosis_pointer_4]
+    pointers = line.diagnosis_pointers
 
     out = [
         Segment("LX", str(number)),

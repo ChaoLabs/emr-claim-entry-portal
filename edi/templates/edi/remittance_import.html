@@ -1,0 +1,14 @@
+{% extends 'claims/base.html' %}
+{% block title %}Import 835 · EMRTS{% endblock %}
+{% block content %}
+{% include 'edi/_styles.html' %}
+<div class="response-head"><div><h1>Import returned 835</h1><p>Choose the completed response file retrieved from the processing server.</p></div></div>
+<section class="card response-form">
+<form method="post" enctype="multipart/form-data">{% csrf_token %}
+{{ form.as_p }}
+<button class="button" type="submit">Import response</button>
+<a class="response-secondary" href="{% url 'edi:remittance_list' %}">Cancel</a>
+</form>
+<div class="response-note">The exact file is archived. Claim numbers are matched to existing claims; unmatched results stay visible for review. Importing the same file again does not create a duplicate.</div>
+</section>
+{% endblock %}

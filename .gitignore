@@ -37,3 +37,9 @@ inbox/
 transfer-logs/
 *.pem
 *.key
+
+# Returned remittances and local preview configuration
+*.835
+*.837
+edi-return/
+.openai/

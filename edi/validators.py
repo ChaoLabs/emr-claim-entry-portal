@@ -144,15 +144,49 @@ def validate_service_line(context, line, number):
     elif line.service_to_date and line.service_to_date < line.service_from_date:
         out.append(Issue("2400 DTP472", "service end date is before the start date", number))
 
-    pointers = [line.diagnosis_pointer_1, line.diagnosis_pointer_2,
-                line.diagnosis_pointer_3, line.diagnosis_pointer_4]
-    if not any(pointers):
-        out.append(Issue("2400 SV107", "service line has no diagnosis pointer", number))
-    for index, pointer in enumerate(pointers, start=1):
-        if pointer and pointer not in context.diagnosis_orders:
-            out.append(Issue("2400 SV107", f"pointer {index} points at diagnosis {pointer}, "
-                                           f"which the claim does not have", number))
+    out.extend(validate_line_relationships(context, line, number))
     return out
+
+
+def validate_line_relationships(context, line, number):
+    """Storage is flexible; the selected 5010 wire format is deliberately bounded."""
+    out = []
+    links = list(line.diagnosis_links.all())
+    pointers = [link.diagnosis.diagnosis_order for link in links]
+    if line.claim_id != context.claim.pk:
+        out.append(Issue("2400 SV107", "service line belongs to another claim", number))
+    if not links:
+        out.append(Issue("2400 SV107", "service line has no diagnosis pointer", number))
+    if len(links) > 4:
+        out.append(Issue("2400 SV107", "005010X222A1 supports at most 4 diagnosis pointers per service line; all captured links remain saved", number))
+    for index, link in enumerate(links, start=1):
+        if link.diagnosis.claim_id != context.claim.pk:
+            out.append(Issue("2400 SV107", "linked diagnosis belongs to another claim", number))
+        if link.diagnosis.diagnosis_order not in context.diagnosis_orders:
+            out.append(Issue("2400 SV107", f"pointer {index} refers to a diagnosis not present on this claim", number))
+    if len(pointers) != len(set(pointers)):
+        out.append(Issue("2400 SV107", "service line contains duplicate diagnosis pointers", number))
+    modifiers = line.modifier_codes
+    if len(modifiers) > 4:
+        out.append(Issue("2400 SV101", "005010X222A1 supports at most 4 modifiers per service line; all captured modifiers remain saved", number))
+    for modifier in modifiers:
+        if len(modifier) != 2 or not modifier.isascii() or not modifier.isalnum():
+            out.append(Issue("2400 SV101", "each exported modifier must contain 2 ASCII letters or digits", number))
+    return out
+
+
+def ensure_export_relationships(context, line=None, number=None):
+    """Never let --force/--ignore produce an unrepresentable relationship.
+
+    Also called by builders used outside the management command. No truncation,
+    re-numbering, splitting or dropping diagnoses/modifiers is performed.
+    """
+    issues = validate_diagnoses(context)
+    lines = [(number, line)] if line is not None else enumerate(context.service_lines, start=1)
+    for line_number, service_line in lines:
+        issues.extend(validate_line_relationships(context, service_line, line_number))
+    if issues:
+        raise ValueError("Cannot represent captured relationships in 837P: " + "; ".join(str(issue) for issue in issues))
 
 
 def validate(context):

@@ -1,0 +1,7 @@
+<article class="diagnosis-row" data-diagnosis-form data-row-key="{{ diagnosis_form.prefix }}" {% if diagnosis_form.DELETE.value %}hidden{% endif %}>
+    {{ diagnosis_form.DELETE.as_hidden }}
+    <div class="diagnosis-number" aria-hidden="true" data-diagnosis-number>{{ diagnosis_number }}</div>
+    <div class="form-field">{{ diagnosis_form.diagnosis_code.label_tag }}{{ diagnosis_form.diagnosis_code }}{{ diagnosis_form.diagnosis_code.errors }}</div>
+    <div class="form-field">{{ diagnosis_form.description.label_tag }}{{ diagnosis_form.description }}{{ diagnosis_form.description.errors }}</div>
+    <button type="button" class="text-button remove-diagnosis" data-remove-diagnosis>Remove diagnosis</button>
+</article>

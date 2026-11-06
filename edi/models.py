@@ -216,3 +216,64 @@ class BatchClaim(TimeStamped):
 
     def __str__(self):
         return f"{self.claim_number} in {self.batch_id}"
+
+
+class RemittanceDocument(models.Model):
+    """An exact received 835, not a promise that payment has settled."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    content = models.TextField(editable=False)
+    sha256 = models.CharField(max_length=64, unique=True, editable=False)
+    byte_count = models.PositiveBigIntegerField(editable=False)
+    source_name = models.CharField(max_length=255)
+    imported_by = models.CharField(max_length=150)
+    imported_at = models.DateTimeField(auto_now_add=True)
+    batch = models.ForeignKey(SubmissionBatch, null=True, blank=True,
+                              on_delete=models.PROTECT, related_name="remittances")
+    summary = models.JSONField(default=dict, editable=False)
+
+    class Meta:
+        ordering = ["-imported_at"]
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise ValidationError("An imported 835 cannot be edited; retain the original response.")
+        payload = self.content.encode("ascii")
+        self.sha256 = hashlib.sha256(payload).hexdigest()
+        self.byte_count = len(payload)
+        kwargs["force_insert"] = True
+        return super().save(*args, **kwargs)
+
+    def verify_integrity(self):
+        try:
+            payload = self.content.encode("ascii")
+        except UnicodeEncodeError as exc:
+            raise ValidationError("The archived 835 failed its integrity check.") from exc
+        if len(payload) != self.byte_count or hashlib.sha256(payload).hexdigest() != self.sha256:
+            raise ValidationError("The archived 835 failed its integrity check.")
+        return payload
+
+    def __str__(self):
+        return f"835 response {self.pk}"
+
+
+class RemittanceClaim(models.Model):
+    document = models.ForeignKey(RemittanceDocument, on_delete=models.PROTECT,
+                                 related_name="claim_results")
+    position = models.PositiveIntegerField()
+    claim = models.ForeignKey("claims.Claim", null=True, blank=True,
+                              on_delete=models.SET_NULL, related_name="remittance_claims")
+    claim_number = models.CharField(max_length=255)
+    status_code = models.CharField(max_length=2)
+    payer_control_number = models.CharField(max_length=255, blank=True)
+    charge_amount = models.DecimalField(max_digits=18, decimal_places=2)
+    paid_amount = models.DecimalField(max_digits=18, decimal_places=2)
+    patient_responsibility = models.DecimalField(max_digits=18, decimal_places=2, null=True)
+    details = models.JSONField(default=dict)
+
+    class Meta:
+        ordering = ["position"]
+        constraints = [models.UniqueConstraint(fields=["document", "position"], name="unique_remittance_claim_position")]
+
+    def __str__(self):
+        return f"Claim result {self.position} in {self.document_id}"

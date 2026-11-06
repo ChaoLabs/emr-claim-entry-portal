@@ -1,184 +1,48 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>{% block title %}EMRTS Claim Entry Portal{% endblock %}</title>
+    <title>{% block title %}Claim workspace · EMRTS{% endblock %}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-
-    <style>
-        :root {
-            --bg: #f4f6f8;
-            --card: #ffffff;
-            --text: #17202a;
-            --muted: #6b7280;
-            --border: #d9dee7;
-            --primary: #1f4e79;
-            --primary-dark: #173a5a;
-            --success: #1f7a4d;
-            --warning: #a16207;
-            --danger: #b42318;
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            margin: 0;
-            font-family: Arial, Helvetica, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-        }
-
-        header {
-            background: var(--primary);
-            color: white;
-            padding: 18px 32px;
-            border-bottom: 4px solid var(--primary-dark);
-        }
-
-        header h1 {
-            margin: 0;
-            font-size: 22px;
-            letter-spacing: 0.2px;
-        }
-
-        header p {
-            margin: 6px 0 0;
-            font-size: 14px;
-            opacity: 0.9;
-        }
-
-        nav {
-            background: white;
-            border-bottom: 1px solid var(--border);
-            padding: 12px 32px;
-        }
-
-        nav a {
-            color: var(--primary);
-            font-weight: 600;
-            text-decoration: none;
-            margin-right: 22px;
-        }
-
-        nav a:hover {
-            text-decoration: underline;
-        }
-
-        main {
-            max-width: 1180px;
-            margin: 28px auto;
-            padding: 0 24px;
-        }
-
-        .card {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 24px;
-            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
-        }
-
-        .page-title {
-            margin: 0 0 8px;
-            font-size: 26px;
-        }
-
-        .page-subtitle {
-            margin: 0 0 24px;
-            color: var(--muted);
-        }
-
-        .messages {
-            margin-bottom: 18px;
-        }
-
-        .message {
-            padding: 12px 14px;
-            border-radius: 8px;
-            background: #e8f5ee;
-            color: var(--success);
-            border: 1px solid #b7e0c6;
-            margin-bottom: 10px;
-        }
-
-        .button {
-            display: inline-block;
-            background: var(--primary);
-            color: white;
-            padding: 10px 14px;
-            border-radius: 6px;
-            text-decoration: none;
-            font-weight: 600;
-            border: none;
-            cursor: pointer;
-        }
-
-        .button:hover {
-            background: var(--primary-dark);
-        }
-
-        .muted {
-            color: var(--muted);
-        }
-
-        footer {
-            color: var(--muted);
-            font-size: 12px;
-            text-align: center;
-            padding: 28px 0;
-        }
-
-        @media (max-width: 760px) {
-            header,
-            nav {
-                padding-left: 18px;
-                padding-right: 18px;
-            }
-
-            nav a {
-                display: inline-block;
-                margin: 4px 14px 4px 0;
-            }
-
-            main {
-                margin: 18px auto;
-                padding: 0 12px;
-            }
-
-            .card {
-                padding: 18px;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="{% static 'claims/portal.css' %}">
+    <script src="{% static 'claims/portal.js' %}" defer></script>
+    {% block extra_head %}{% endblock %}
 </head>
 <body>
-    <header>
-        <h1>EMRTS Electronic Claim Entry Portal</h1>
-        <p>CMS-1500 information capture and claim preparation workflow</p>
-    </header>
-
-    <nav>
-        <a href="{% url 'claims:dashboard' %}">Dashboard</a>
-        <a href="{% url 'claims:capture_claim' %}">New CMS-1500 Claim</a>
-        <a href="{% url 'admin:index' %}">Admin</a>
-    </nav>
-
-    <main>
-        {% if messages %}
-            <div class="messages">
-                {% for message in messages %}
-                    <div class="message">{{ message }}</div>
-                {% endfor %}
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <aside class="workspace-sidebar" aria-label="Workspace navigation">
+        <a class="brand" href="{% url 'claims:dashboard' %}" aria-label="EMRTS claim workspace home">
+            <img src="{% static 'claims/emrts-logo.png' %}" alt="EMR Technical Solutions" width="184" height="88">
+        </a>
+        <div class="workspace-label">CLAIM WORKSPACE</div>
+        <nav class="workspace-nav" aria-label="Main navigation">
+            <a href="{% url 'claims:dashboard' %}" {% if request.resolver_match.app_name == 'claims' and request.resolver_match.url_name != 'capture_claim' %}aria-current="page"{% endif %}>{% include 'claims/_icon.html' with name='claims' %}<span>Claims</span></a>
+            <a href="{% url 'claims:capture_claim' %}" {% if request.resolver_match.url_name == 'capture_claim' %}aria-current="page"{% endif %}>{% include 'claims/_icon.html' with name='plus' %}<span>New claim</span></a>
+            {% if request.user.is_staff %}
+            <div class="nav-label">FILE EXCHANGE</div>
+            <a href="{% url 'workflow:archive' %}" {% if request.resolver_match.app_name == 'workflow' %}aria-current="page"{% endif %}>{% include 'claims/_icon.html' with name='outgoing' %}<span>837P files</span></a>
+            <a href="{% url 'edi:remittance_list' %}" {% if request.resolver_match.app_name == 'edi' %}aria-current="page"{% endif %}>{% include 'claims/_icon.html' with name='incoming' %}<span>835 responses</span></a>
+            {% endif %}
+        </nav>
+        <div class="sidebar-bottom">
+            <a class="admin-link" href="{% url 'admin:index' %}">{% include 'claims/_icon.html' with name='settings' %}<span>Administration</span>{% include 'claims/_icon.html' with name='arrow' %}</a>
+            <div class="sidebar-identity">
+                <span class="identity-avatar" aria-hidden="true">{% if request.user.is_authenticated %}{{ request.user.get_username|slice:':1'|upper }}{% else %}E{% endif %}</span>
+                <div><strong>{% if request.user.is_authenticated %}{{ request.user.get_short_name|default:request.user.username }}{% else %}EMRTS workspace{% endif %}</strong><small>{% if request.user.is_staff %}Staff access{% else %}<a href="{% url 'admin:login' %}?next={{ request.path|urlencode }}">Staff sign in</a>{% endif %}</small></div>
             </div>
-        {% endif %}
-
-        {% block content %}{% endblock %}
-    </main>
-
-    <footer>
-        Development demo only. Do not enter real PHI.
-    </footer>
+        </div>
+    </aside>
+    <div class="workspace-body">
+        <header class="workspace-bar">
+            <div class="breadcrumb"><span>Claim workspace</span><span aria-hidden="true">/</span><strong>{% block section_name %}{% if request.resolver_match.app_name == 'workflow' %}837P files{% elif request.resolver_match.app_name == 'edi' %}835 responses{% elif request.resolver_match.url_name == 'capture_claim' %}New claim{% elif request.resolver_match.url_name == 'claim_detail' %}Claim review{% else %}Overview{% endif %}{% endblock %}</strong></div>
+            <span class="environment-label"><span aria-hidden="true"></span>Development demo</span>
+        </header>
+        <main id="main-content" class="workspace-main">
+            {% if messages %}<div class="messages" aria-live="polite">{% for message in messages %}<div class="message {{ message.tags }}">{{ message }}</div>{% endfor %}</div>{% endif %}
+            {% block content %}{% endblock %}
+        </main>
+        <footer class="workspace-footer"><span>EMR Technical Solutions</span><span>Synthetic data only · Do not enter real PHI.</span></footer>
+    </div>
 </body>
 </html>

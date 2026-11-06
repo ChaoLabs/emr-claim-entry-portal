@@ -42,7 +42,10 @@ class Command(BaseCommand):
         wire_numbers = [formatters.clean(c.claim.claim_number) for c in accepted]
         if not all(wire_numbers) or len(set(wire_numbers)) != len(wire_numbers):
             raise CommandError("claim numbers must be nonempty and unique after X12 formatting")
-        body, counter = builders.build_body(accepted)
+        try:
+            body, counter = builders.build_body(accepted)
+        except ValueError as exc:
+            raise CommandError(str(exc)) from exc
         moment = timezone.now()
 
         if options["dry_run"]:

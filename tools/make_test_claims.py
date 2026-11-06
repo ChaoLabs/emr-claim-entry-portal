@@ -28,6 +28,7 @@ from django.db import transaction
 from claims.models import (
     Claim, ClaimCoverage, ClaimDiagnosis, ClaimProvider,
     InsurancePolicy, InsuredParty, Patient, Payer, Provider, ServiceLine,
+    ServiceLineDiagnosis, ServiceLineModifier,
 )
 
 TEST_NUMBERS = ["CLM-TEST-002", "CLM-TEST-003"]
@@ -93,14 +94,18 @@ def create():
         ("21", "99215", ("25", "59"), (1, 2, 3), Decimal("100.00")),
     ]
     for pos, proc, mods, ptrs, charge in lines:
-        ServiceLine.objects.create(
+        line = ServiceLine.objects.create(
             claim=claim, service_from_date=datetime.date(2026, 7, 1),
             service_to_date=datetime.date(2026, 7, 1), place_of_service=pos,
             procedure_code=proc, rendering_provider=rendering,
-            modifier_1=mods[0], modifier_2=mods[1],
-            diagnosis_pointer_1=ptrs[0], diagnosis_pointer_2=ptrs[1],
-            diagnosis_pointer_3=ptrs[2], charge_amount=charge, units=1,
+            charge_amount=charge, units=1,
         )
+
+        for position, code in enumerate(filter(None, mods), start=1):
+            ServiceLineModifier.objects.create(service_line=line, code=code, position=position)
+        for position, pointer in enumerate(filter(None, ptrs), start=1):
+            ServiceLineDiagnosis.objects.create(service_line=line,
+                diagnosis=claim.diagnoses.get(diagnosis_order=pointer), position=position)
 
     patient3 = Patient.objects.create(
         first_name="Rosa", last_name="Diaz", date_of_birth=datetime.date(1978, 11, 2),
@@ -138,12 +143,14 @@ def create():
                                  provider_role=ClaimProvider.ROLE_BILLING)
     ClaimDiagnosis.objects.create(claim=claim3, diagnosis_code="M54.50",
                                   diagnosis_order=1, description="Low back pain")
-    ServiceLine.objects.create(
+    line3 = ServiceLine.objects.create(
         claim=claim3, service_from_date=datetime.date(2026, 7, 5),
         service_to_date=datetime.date(2026, 7, 5), place_of_service="11",
-        procedure_code="99213", diagnosis_pointer_1=1,
+        procedure_code="99213",
         charge_amount=Decimal("88.40"), units=1,
     )
+
+    ServiceLineDiagnosis.objects.create(service_line=line3, diagnosis=claim3.diagnoses.get(), position=1)
 
     print("created:")
     print("CLM-TEST-002  patient is not the subscriber, 4 diagnoses, 3 lines, mixed POS")

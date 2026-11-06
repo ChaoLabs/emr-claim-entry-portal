@@ -2,6 +2,21 @@
 
 This logical data model combines normalized CMS-1500 claim and coverage records with focused reference entities for NPI, ICD-10-CM, and CPT / HCPCS validation.
 
+## Service-line relationships
+
+Use this focused view for the demo. One claim owns both its diagnoses and its service lines. The linking table records which diagnoses support each line, in order; modifier rows belong directly to a line.
+
+```mermaid
+erDiagram
+    CLAIM ||--o{ CLAIM_DIAGNOSIS : contains
+    CLAIM ||--o{ SERVICE_LINE : contains
+    CLAIM_DIAGNOSIS ||--o{ SERVICE_LINE_DIAGNOSIS : supports
+    SERVICE_LINE ||--o{ SERVICE_LINE_DIAGNOSIS : references
+    SERVICE_LINE ||--o{ SERVICE_LINE_MODIFIER : has
+```
+
+The database enforces unique links and positions. Model and form validation enforce that both ends of a diagnosis link belong to the same claim.
+
 ## ERD
 
 ```mermaid
@@ -16,6 +31,9 @@ erDiagram
     PROVIDERS ||--o{ CLAIM_PROVIDERS : "serves in role"
     CLAIMS ||--o{ CLAIM_DIAGNOSES : contains
     CLAIMS ||--o{ SERVICE_LINES : contains
+    SERVICE_LINES ||--o{ SERVICE_LINE_DIAGNOSES : references
+    CLAIM_DIAGNOSES ||--o{ SERVICE_LINE_DIAGNOSES : supports
+    SERVICE_LINES ||--o{ SERVICE_LINE_MODIFIERS : has
     PROVIDERS o|--o{ SERVICE_LINES : renders
     CLAIMS ||--o{ CLAIM_AUDIT_EVENTS : records
 
@@ -126,13 +144,22 @@ erDiagram
         string procedure_reference_id FK
         date service_dates
         string place_of_service
-        string modifier_1
-        string modifier_2
-        string modifier_3
-        string modifier_4
-        int diagnosis_pointers
         decimal charge_amount
         int units
+    }
+
+    SERVICE_LINE_DIAGNOSES {
+        bigint id PK
+        uuid service_line_id FK
+        uuid diagnosis_id FK
+        int position
+    }
+
+    SERVICE_LINE_MODIFIERS {
+        bigint id PK
+        uuid service_line_id FK
+        string code
+        int position
     }
 
     CLAIM_AUDIT_EVENTS {
@@ -200,12 +227,14 @@ The model has three clear areas:
 - The original `npi`, `diagnosis_code`, and `procedure_code` strings remain on transactional rows as **claim-time snapshots**. Nullable reference keys add validation and descriptions without rewriting history when an external code set changes.
 - A claim can own any number of service-line records. The web capture workflow adds lines dynamically instead of enforcing the paper form's six-line layout limit.
 - `service_lines.rendering_provider_id` is a direct relationship because rendering provider information is service-line context (CMS-1500 Item 24J).
-- The four diagnosis-pointer columns are retained because they directly represent CMS-1500 Item 24E's bounded positions 1–4. A separate join table would add complexity without improving this bounded relationship.
+- Ordered `ServiceLineDiagnosis` rows implement the many-to-many relationship. `ServiceLineModifier` rows replace four fixed modifier columns. The UI adds and removes entries dynamically.
+- The current 837P exporter has a four-reference/four-modifier per-line boundary; capture beyond that is retained, but export stops for review rather than dropping values.
+- Claims migration `0005` backfills valid legacy values before removing fixed columns. Invalid legacy associations stop the migration for correction.
 - `claim_coverages` separates a claim from a reusable insurance policy and supports primary, secondary, and tertiary coverage without duplicating subscriber and payer data.
 
 ## Extension points
 
-`reference_data_updates` provides a clean integration point for scheduled downloads and bulk loaders. The normalized claim aggregate provides the structured source needed for 837P transformation, transmission tracking, and acknowledgement processing as those workflows are introduced.
+`reference_data_updates` provides a clean integration point for scheduled downloads and bulk loaders. The normalized claim aggregate supplies the existing 837P exporter. Staff can generate and download an archived test file, and import/view returned 835 files. Transfer and engine execution remain separate operations; see the [EDI ERD](edi-erd.md).
 
 ## Official source context
 

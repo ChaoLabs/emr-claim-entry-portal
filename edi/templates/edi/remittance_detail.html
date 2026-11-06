@@ -1,0 +1,32 @@
+{% extends 'claims/base.html' %}
+{% block title %}835 response · EMRTS{% endblock %}
+{% block content %}
+{% include 'edi/_styles.html' %}
+<p><a class="response-link" href="{% url 'edi:remittance_list' %}">← All 835 responses</a></p>
+<div class="response-head"><div><h1>Returned claim results</h1><p>{{ document.source_name }}</p><p class="response-meta">Imported {{ document.imported_at|date:'M j, Y · H:i T' }} · {{ document.imported_by }}</p></div><a class="button" href="{% url 'edi:remittance_download' document.pk %}">Download original 835</a></div>
+{% if unmatched_count %}<div class="response-note">{{ unmatched_count }} result{{ unmatched_count|pluralize }} could not be matched to an existing claim. Review the returned claim number with the sender; no claim was guessed or created.</div>{% endif %}
+<section class="card response-card">
+<h2>Payment information reported in the file</h2>
+<div class="response-scroll"><table class="response-table"><thead><tr><th>Transaction</th><th>Payment date</th><th>Method code</th><th>Trace reference</th><th class="money">Reported payment</th></tr></thead><tbody>
+{% for txn in document.summary.transactions %}<tr><td>Group {{ txn.group_control }} · {{ txn.control }}</td><td>{{ txn.payment_date|default:'Not supplied' }}</td><td>{{ txn.payment_method }}</td><td>{{ txn.trace|default:'Not supplied' }}</td><td class="money">{{ txn.payment_amount }}</td></tr>{% endfor %}
+</tbody></table></div>
+<p class="response-meta">Amounts are shown exactly as reported, without an assumed currency or settlement confirmation. Claim-level and service-level adjustments are displayed separately.</p>
+</section>
+{% for result in results %}
+<section class="card response-card">
+<div class="response-head"><div><h2>Claim {{ result.claim_number }}</h2>{% if result.claim %}<a class="response-link" href="{% url 'claims:claim_detail' result.claim_id %}">View captured claim</a>{% else %}<span class="response-pill">Unmatched claim number</span>{% endif %}</div><span class="response-pill">Reported status code {{ result.status_code }}</span></div>
+<div class="response-scroll"><table class="response-table"><thead><tr><th>Payer claim reference</th><th class="money">Submitted charge</th><th class="money">Claim payment</th><th class="money">Patient responsibility</th></tr></thead><tbody><tr><td>{{ result.payer_control_number|default:'Not supplied' }}</td><td class="money">{{ result.charge_amount }}</td><td class="money">{{ result.paid_amount }}</td><td class="money">{{ result.patient_responsibility|default_if_none:'Not supplied' }}</td></tr></tbody></table></div>
+{% if result.details.adjustments %}<h3>Claim adjustments</h3>{% include 'edi/_adjustments.html' with adjustments=result.details.adjustments %}{% endif %}
+{% if result.details.remarks %}<p class="response-meta">Claim remark codes: {{ result.details.remarks|join:', ' }}</p>{% endif %}
+{% for service in result.details.services %}
+<h3>Service {{ forloop.counter }} · {{ service.procedure }}</h3>
+<div class="response-scroll"><table class="response-table"><thead><tr><th>Returned line reference</th><th class="money">Submitted charge</th><th class="money">Service payment</th></tr></thead><tbody><tr><td>{{ service.line_reference|default:'Not supplied — line not automatically matched' }}</td><td class="money">{{ service.charge }}</td><td class="money">{{ service.paid }}</td></tr></tbody></table></div>
+{% if service.adjustments %}{% include 'edi/_adjustments.html' with adjustments=service.adjustments %}{% endif %}
+{% if service.remarks %}<p class="response-meta">Service remark codes: {{ service.remarks|join:', ' }}</p>{% endif %}
+{% empty %}<p class="response-meta">No service-level payment detail was included for this claim.</p>{% endfor %}
+<p class="response-meta">Group {{ result.details.group_control }} · Transaction {{ result.details.transaction_control }} · Codes are retained as reported. Review the original file and payer documentation for their full meaning.</p>
+</section>
+{% empty %}<section class="card response-card"><h2>No claim-level results</h2><p class="muted">This response contains no CLP claim records. Review the original file for its payment and provider-level information.</p></section>{% endfor %}
+<section class="card response-card"><h2>Review notes</h2>{% for note in document.summary.notes %}<p class="response-meta">{{ note }}</p>{% endfor %}
+<details class="response-details"><summary>Archive information</summary><p class="response-meta">SHA-256: {{ document.sha256 }}<br>{{ document.byte_count }} bytes · Archive {{ document.pk }}{% if document.batch_id %}<br>Confirmed submission batch: {{ document.batch_id }}{% else %}<br>No submission batch was asserted at import.{% endif %}</p></details></section>
+{% endblock %}

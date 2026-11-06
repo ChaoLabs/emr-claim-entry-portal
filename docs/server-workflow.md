@@ -11,7 +11,9 @@ addresses belong in this public repository.
 | --- | --- | --- |
 | CMS-1500 capture and reference validation | Chao / portal | Existing demo |
 | 837P generation and batch metadata | Chao / Janus candidate | Integrated CLI prototype |
-| Read-only export checks | Portal / Vercel | Included in this integration |
+| Export checks, staff generation and archived download | Chao / portal | Included; generated does not mean sent |
+| Returned 835 import and viewer | Chao / portal | Staff upload or CLI import; exact raw archive and claim-number matching |
+| Completed 835 retrieval | Chao / approved operator machine | Explicit single-file SCP download with hash checks; live return test pending |
 | Provider/member reference data in PostgreSQL | Tim / Vesta | Small dataset shown in local demo; full server load pending |
 | SCP transfer and transfer audit trail | Chao / Janus and Vesta | Private-inbox transfer verified; shared 837P target supported by CLI |
 | Claim server processing and 835 | Tim / Vesta | Local demo reviewed October 5; Vesta deployment and joint test pending |
@@ -131,15 +133,47 @@ do not regenerate a different file during a retry.
   retention/access, and tamper-evidence are deployment decisions still pending;
   these local logs are not a claim of production compliance.
 
-## 5. Acceptance tests before turning on a worker
+## 5. Retrieve and view the returned 835
+
+Ask Tim which completed response file corresponds to the demonstration claim. The earlier handoff identified `/srv/X12/835`, but confirm current permissions and the final filename before running retrieval. The helper does not poll directories, invoke the engine, or delete remote files. It requires the existing approved SSH alias/key and a verified host key.
+
+From the existing checkout on Janus or the operator's machine, replace the example alias and path with the confirmed values:
+
+```bash
+python3 tools/retrieve_835.py --host vesta --remote-file /confirmed/outgoing/response.835 --output-dir "$HOME/edi-return" --dry-run
+python3 tools/retrieve_835.py --host vesta --remote-file /confirmed/outgoing/response.835 --output-dir "$HOME/edi-return"
+```
+
+`vesta` above is an example existing SSH configuration alias, not a hostname provisioned by this project. Optional `--identity /path/to/existing/key` and `--port` use existing access. Do not put a password into a command.
+
+The helper compares remote fingerprints before and after download with the local SHA-256. It downloads into a private staging file, refuses conflicting output, and publishes a complete `<sha256>.835` file. The JSON result includes `local_file`; `returns.jsonl` records metadata. A checksum match establishes transfer integrity, not claim correctness or adjudication acceptance. A failed or changing remote file is not exposed as a completed response.
+
+Then choose the import path for the intended database:
+
+- **Hosted portal:** sign into Admin with an active staff account, open **835 responses**, and upload the returned file. This writes to the database configured for that deployment.
+- **Configured local/server checkout:** run the following with the actual `local_file` path returned above:
+
+```bash
+uv run python manage.py import_835 --file /actual/path/to/returned-file.835
+```
+
+An optional `--batch YOUR_BATCH_UUID` associates an explicitly known submission batch after validating claim membership. Do not infer a batch from a reused filename. Re-importing identical content returns the existing archive; a different payload is a separate response.
+
+The bounded importer accepts ASCII 5010 835 files up to 2 MB with one complete interchange; envelope counts and control references must agree. Larger or unsupported files require a reviewed importer extension.
+
+In **835 responses**, review the exact claim-number match, returned claim status code, reported charges/paid amounts, service results, and adjustment codes. Unmatched claims remain visible for operator review. Downloading the original returns the archived bytes. Service results are displayed as reported; the viewer does not assume that identical procedure codes identify a unique original service line. This is a bounded response viewer, not automatic financial reconciliation, payment posting, or fraud adjudication.
+
+Synthetic examples must be identified as synthetic during the demo. Until Tim supplies an actual output and the shared path is tested, describe the implemented return path as ready for joint testing, not as a completed live integration.
+
+## 6. Acceptance tests before turning on a worker
 
 1. Dry run makes no network calls and changes no transfer state.
 2. Bad host key, missing key, permission failure and timeout fail closed.
 3. Interrupted upload is invisible to the receiver; retry does not duplicate.
-4. Corrupt file/checksum mismatch is quarantined, not published.
+4. A corrupt file/checksum mismatch is not published; retain operator evidence for investigation.
 5. Restart after publication but before the sender records success reconciles
    the existing transfer rather than resending it.
-6. One fictional claim reaches the API once; correlate any 835 response and
+6. One fictional claim reaches Tim's agreed consumer once; correlate its 835 response and
    per-line adjustments without assuming whole-file accept/reject.
 7. Two claims, invalid references, duplicate inputs and partial line-level
    outcomes have documented results agreed with Tim.

@@ -1,3 +1,7 @@
+# EDI export and response records
+
+## Generated files
+
 ```mermaid
 erDiagram
     TRADING_PARTNER ||--o{ CONTROL_NUMBER : maintains
@@ -82,3 +86,44 @@ the updated command creates one document. The one-to-one constraint prevents
 duplicate archive rows for a batch, and its `PROTECT` relationship blocks ordinary
 ORM deletion of an archived batch. No automatic expiry or historical backfill is
 implemented. See [archive behavior and review](../x12-archive.md).
+
+## Returned 835 files
+
+```mermaid
+erDiagram
+    SUBMISSION_BATCH o|--o{ REMITTANCE_DOCUMENT : "optional provenance"
+    REMITTANCE_DOCUMENT ||--o{ REMITTANCE_CLAIM : contains
+    CLAIM o|--o{ REMITTANCE_CLAIM : "exact number match"
+
+    REMITTANCE_DOCUMENT {
+        uuid id PK
+        uuid batch_id FK
+        text content
+        string sha256 UK
+        bigint byte_count
+        string source_name
+        string imported_by
+        datetime imported_at
+        json summary
+    }
+
+    REMITTANCE_CLAIM {
+        bigint id PK
+        uuid document_id FK
+        uuid claim_id FK
+        int position
+        string claim_number
+        string status_code
+        string payer_control_number
+        decimal charge_amount
+        decimal paid_amount
+        decimal patient_responsibility
+        json details
+    }
+```
+
+`RemittanceDocument` retains the exact imported ASCII 835 text and integrity metadata. A duplicate SHA-256 reuses the existing receipt rather than creating duplicate claim results. `RemittanceClaim` stores each CLP result in file order. Its optional claim link uses an exact claim-number match; an unmatched number remains visible for review. The original CLP number remains even if a linked claim is later removed.
+
+The bounded viewer retains service-level SVC/CAS data and financial values in `details`; it does not guess service-line identity from procedure codes or positions. An operator may supply a submission-batch UUID as provenance only when the importer verifies the claim membership. The 835 and the original 837P have separate immutable document records; importing a response never rewrites the submitted X12 or marks a batch paid/accepted.
+
+Application-level read-only controls do not make these tables tamper-proof against direct SQL. Staff login is required for import, viewing, and download. See [server workflow](../server-workflow.md) for retrieval and review.

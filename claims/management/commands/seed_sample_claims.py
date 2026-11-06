@@ -20,6 +20,7 @@ from claims.models import (
     Provider,
     ReferenceDataUpdate,
     ServiceLine,
+    ServiceLineDiagnosis,
 )
 
 
@@ -309,7 +310,7 @@ class Command(BaseCommand):
             provider_role=ClaimProvider.ROLE_RENDERING,
         )
 
-        ClaimDiagnosis.objects.create(
+        diagnosis = ClaimDiagnosis.objects.create(
             claim=claim,
             diagnosis_code="M54.50",
             icd10_reference=low_back_pain,
@@ -317,7 +318,7 @@ class Command(BaseCommand):
             description="Low back pain, unspecified",
         )
 
-        ServiceLine.objects.create(
+        line = ServiceLine.objects.create(
             claim=claim,
             service_from_date="2026-07-26",
             service_to_date="2026-07-26",
@@ -325,10 +326,11 @@ class Command(BaseCommand):
             procedure_code="99213",
             procedure_reference=office_visit,
             rendering_provider=rendering_provider,
-            diagnosis_pointer_1=1,
             charge_amount=Decimal("125.00"),
             units=1,
         )
+
+        ServiceLineDiagnosis.objects.create(service_line=line, diagnosis=diagnosis, position=1)
 
         ClaimAuditEvent.objects.create(
             claim=claim,

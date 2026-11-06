@@ -6,11 +6,14 @@ A Django development application for capturing, validating, reviewing, and persi
 
 The application currently includes:
 
-- a CMS-1500-oriented claim-entry form with dynamically repeatable service lines;
+- a CMS-1500-oriented claim-entry form with dynamically repeatable diagnoses, service lines, diagnosis selections, and modifiers;
+- ordered many-to-many service-line/diagnosis links, validated within the same claim;
 - normalized patient, subscriber, payer, policy, coverage, provider, diagnosis, and service-line persistence;
 - NPI, ICD-10-CM, and CPT / HCPCS reference validation;
 - reference source/version/update metadata visible on the dashboard;
 - claim-detail reference-match indicators and audit events;
+- staff-only 837P generation and an archive register with a readable claim/service-line table, original X12, and exact-file download;
+- staff-only import and review of returned 835 claim/service results, with original-file download;
 - Django Admin maintenance for operational and reference records;
 - Mermaid ERD, data-model rationale, PostgreSQL-oriented schema, fictional demo data, and automated tests.
 
@@ -60,11 +63,25 @@ Vercel `*.vercel.app` hosts are allowed automatically. If you add a custom domai
 
 The hosted instance remains a development demonstration. Do not enter real PHI or production credentials into claim fields.
 
+### Working from the existing Janus checkout
+
+Use the repository and Python environment already on Janus. After applying and reviewing the change there, run the checks and migrations for that checkout's configured database, then commit and push the reviewed source to GitHub. The existing Git-connected Vercel project deploys the pushed production branch; check its build log and deployed UI separately. No second clone or repository is needed.
+
+Each process uses its own environment and database settings. Updating source files or running `migrate` on Janus does **not** update Vercel's database. The Vercel build runs migrations against that deployment's `DATABASE_URL`; claim records and X12 archives are shared only if the two environments have deliberately been configured to use the same database. Do not assume that configuration or copy connection strings into source control.
+
+The EMRTS logo, stylesheet, and UI script are Django static assets under `claims/static/claims/`. `STATIC_ROOT` is already configured as the checkout's `staticfiles` directory. [Vercel's Django support](https://vercel.com/docs/frameworks/full-stack/django#serving-static-assets) automatically runs `collectstatic` and serves these assets; no Node build or duplicate manual Vercel static step is required. For a Janus production web process, run `uv run python manage.py collectstatic --noinput` in the configured deployment environment and use its existing web server/static configuration to serve `/static/` from `STATIC_ROOT`. Collecting files alone does not configure that web server. Django's development `runserver` with `DEBUG=True` serves app static assets for local checks.
+
 ## EDI 837P generation
 
 The `edi` app is an experimental exporter for saved claims, integrated from [kzzz12138/cms1500-to-837p-converter](https://github.com/kzzz12138/cms1500-to-837p-converter) at commit `6c429a78e50cb5db36e14ed038a79615d37d0576`. See [integration notes](docs/edi-integration.md) for local corrections and limitations.
 
-It generates an X12-shaped 837P test file, not a certified payer-ready transaction. The file uses version `005010X222A1`. Generation writes a local file and retains its exact contents as a single string in the `X12Document` database table; it does not send anything to a payer or a clearinghouse. Claim Detail shows read-only **837P Export Readiness** checks. The separate `tools/transfer_edi.py` CLI can transfer a generated file between approved servers using SCP, checksum verification, durable receipts, and metadata-only audit logs. It is manually invoked; no scheduled worker, public web generation/download, API adjudication, or 835 return is implemented.
+It generates an X12-shaped 837P test file, not a certified payer-ready transaction. The file uses version `005010X222A1`. CLI generation writes a local file and retains its exact contents as a single string in the `X12Document` database table; it does not send anything to a payer or a clearinghouse. Claim Detail shows read-only **837P Export Readiness** checks. The separate `tools/transfer_edi.py` CLI can transfer a generated file between approved servers using SCP, checksum verification, durable receipts, and metadata-only audit logs. It is manually invoked; no scheduled worker or Rust API adjudication is installed. Staff can generate and download an archived test file from Claim Detail. The return path supports explicit retrieval of a completed 835, then staff upload or CLI import, claim-number matching, and a readable response viewer. Neither generation nor import implies that transfer or engine processing has happened.
+
+### Review the retained 837P
+
+After staff login, **837P files** opens `/x12/`, the paginated file register. Select a file to switch between **Claim summary** and **Original X12**. The summary is derived from the archived X12 itself, including its service-line diagnosis pointers and modifiers; later changes to the claim record do not rewrite that view. Download returns the same archived bytes under the original generated filename. **Print summary** prints the readable review, not an official CMS-1500 paper form.
+
+The generated `.edi` download is the actual ANSI X12 837P test transaction. It is not a spreadsheet or PDF. **Admin > EDI > X12 documents** provides the retained read-only text plus view/download links for authorized staff. Unsupported older archives keep their original-text and download access even when the summary cannot be rendered.
 
 ### Try it locally
 
@@ -123,8 +140,8 @@ Each issue has a tag. The tag names the 837P loop and element, such as `2010AA N
 | Billing provider (2010AA) | The ZIP has 9 digits. The NPI has 10 digits. The tax ID has 9 digits. The street, city and state are not empty. |
 | Payer (2010BB) | The payer ID, street, city and state are not empty. The ZIP has 5 or 9 digits. |
 | Subscriber (2000B, 2010BA) | The relationship to the patient can be turned into a code. The member ID is not empty. The date of birth, street, city, state and a 5- or 9-digit ZIP are filled in. |
-| Diagnoses (2300 HI) | There is at least one diagnosis code. No code appears twice. The diagnosis order starts at 1 and has no gaps. |
-| Service lines (2400) | The claim has at least one service line. Each line has a procedure code and a service date. The end date is not before the start date. Each line has at least one diagnosis pointer. Every pointer matches a diagnosis on the claim. |
+| Diagnoses (2300 HI) | There are 1–12 diagnoses for this exporter. No code appears twice. The diagnosis order starts at 1 and has no gaps. |
+| Service lines (2400) | Each line has a procedure, service date, positive units, and at least one diagnosis reference to this claim. The current export profile supports up to four diagnosis references and four modifiers per line. Overflow is retained in the database but blocks export; it is never truncated. |
 
 ### Relationship code
 
@@ -163,6 +180,8 @@ The envelope is ISA/GS/ST/BHT through SE/GE/IEA. Inside are submitter (1000A), r
 | `SubmissionBatch` | One row for each generated file. It keeps the file name, control numbers, claim count, segment count and total charge. A new batch has the status `generated`. |
 | `BatchClaim` | One row for each claim in a batch, with its position in the file. |
 | `X12Document` | One retained payload per batch, including the exact complete X12 string, SHA-256 checksum, UTF-8 byte count, and creation time. |
+| `RemittanceDocument` | Original returned 835 text, unique checksum, source, importer, import time, and optional batch provenance. |
+| `RemittanceClaim` | Ordered CLP result, optional exact claim-number link, reported amounts, service results, and adjustments. |
 
 Trading partners can be maintained in Django Admin. Control numbers, batches, batch-claim snapshots, and X12 documents are view-only there; generated history cannot be manually relabeled as payer acceptance through Admin. X12 document details include the complete stored string. This is operational history, not a complete tamper-proof audit system.
 
@@ -181,6 +200,22 @@ Run a script with `uv run python`, for example `uv run python tools/export_claim
 
 No upstream `sample/` folder was present at the imported revision. Generated EDI, CSV exports, credentials and server data must not be committed. Never run the fictional-data creation/removal helper against a real claims database.
 
+## November demo workflow
+
+1. Capture two service lines. Select two diagnoses for one line and reuse one diagnosis on the second line; add/remove modifiers without fixed empty slots.
+2. Review the saved claim. Each service line shows the actual linked diagnosis codes and ordered modifiers.
+3. Sign in as staff through Admin, then open the claim's submission workflow. Review export issues, select an active test trading partner, and generate the 837P. Open **837P files** to show the archived claim table, original X12, permanent Admin copy, and exact `.edi` download. A generated file has not yet been sent.
+4. Use the existing SCP transport for the approved destination. Tim owns file pickup, rule execution, and 835 creation. Show actual transfer receipts and actual engine output when available.
+5. Retrieve the completed response using `tools/retrieve_835.py`, or obtain it directly from Tim. Open **835 responses** as staff, import the file, and review claim results, service amounts, adjustments, and the original document.
+
+The web operations use the portal's configured database. A command on Janus or a laptop may use a different database; use the staff upload on the deployed portal to associate a retrieved response with that portal's claims. SSH is never run from a Vercel request. See [server workflow](docs/server-workflow.md) for the exact retrieval command and remaining joint-test decisions.
+
+## Updating existing databases
+
+Claims migration `0005_service_line_relationships` resolves each old numeric pointer to a diagnosis on its own claim and migrates modifiers in order, then removes the eight fixed fields. Invalid or repeated legacy values stop migration for correction; no silent deduplication occurs. EDI migration `0003` adds the response tables. Existing X12 archives stay unchanged.
+
+Use the existing environment and database backup process, review `manage.py migrate --plan`, then apply migrations to the intended database. Vercel builds apply migrations using that deployment's `DATABASE_URL`. Do not roll back the code to a version expecting the removed columns while keeping the new schema. Schema reversal deliberately refuses rows that would lose entries beyond four.
+
 ## Verify
 
 ```bash
@@ -189,7 +224,7 @@ uv run python manage.py check
 uv run python manage.py test claims edi
 ```
 
-The workflow tests cover dashboard/detail rendering, dynamic capture of more than six service lines, charge aggregation, successful reference-linked claim capture, rejection of unknown reference values, and validation of CMS-1500 diagnosis pointers. EDI tests cover generation, exact payload archival and restoration, retry conflicts, rollback behavior, and read-only Admin access.
+The tests cover dynamic capture, same-claim diagnosis links, preserved selection order, reference validation, legacy-data migration, export overflow rejection, archival/restoration, staff-only workflow access, 835 parsing/correlation/idempotency, and retrieval failures. Run the complete suite after updating; a local test result does not establish a successful server or Vercel deployment.
 
 ## Database documentation
 

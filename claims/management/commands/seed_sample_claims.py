@@ -4,6 +4,8 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
+from edi.management.commands.seed_trading_partner import ensure_demo_partner
+
 from claims.models import (
     Claim,
     ClaimAuditEvent,
@@ -27,8 +29,64 @@ from claims.models import (
 class Command(BaseCommand):
     help = "Seed fictional CMS-1500 development claim data. Do not use real PHI."
 
+    # These are fixed synthetic fixture values, not a lookup or a ZIP padding rule.
+    DEMO_BILLING_ZIP = "27701-1234"
+    DEMO_BILLING_EIN = "123456789"
+    SEED_EVENT = "Fictional sample claim created by seed_sample_claims command."
+
+    def _is_seeded_claim(self, claim):
+        return claim.audit_events.filter(
+            event_type="sample_created", event_description=self.SEED_EVENT,
+            changed_by="system",
+        ).exists()
+
+    def _repair_legacy_billing_fixture(self, claim):
+        """Upgrade only the untouched old demo record; never guess real values."""
+        provider_ids = list(claim.claim_providers.filter(
+            provider_role=ClaimProvider.ROLE_BILLING,
+        ).values_list("provider_id", flat=True))
+        if len(provider_ids) != 1:
+            return False
+        # Lock before reading sentinel values so a concurrent Admin update cannot
+        # be overwritten based on a stale snapshot of the old fixture.
+        provider = Provider.objects.select_for_update().get(pk=provider_ids[0])
+        # Match the full identifying fixture, including BOTH legacy placeholders.
+        # A partially corrected or otherwise edited provider is left untouched.
+        expected = {
+            "organization_name": "EMRTS Demo Clinic", "first_name": "", "last_name": "",
+            "npi": "1234567893", "taxonomy_code": "207Q00000X",
+            "tax_id": "DEMO-TAX-ID", "address_line_1": "200 Demo Provider Blvd",
+            "address_line_2": "", "city": "Durham", "state": "NC", "zip_code": "27701",
+            "phone_number": "555-0200",
+        }
+        if any(getattr(provider, field) != value for field, value in expected.items()):
+            return False
+        if (ClaimProvider.objects.filter(provider=provider).exclude(claim=claim).exists()
+                or ServiceLine.objects.filter(rendering_provider=provider).exclude(claim=claim).exists()):
+            return False
+        # Updating this shared identity must not alter a record already used by
+        # any other claim. Exact archived X12 documents are never rewritten.
+        provider.zip_code = self.DEMO_BILLING_ZIP
+        provider.tax_id = self.DEMO_BILLING_EIN
+        provider.save(update_fields=["zip_code", "tax_id", "updated_at"])
+        ClaimAuditEvent.objects.create(
+            claim=claim, event_type="sample_export_prepared", changed_by="system",
+            event_description=(
+                "Replaced legacy sample billing ZIP and tax-ID placeholders with fixed "
+                "fictional ZIP+4 and EIN fixture values for test 837P generation. "
+                "These values are not verified provider data; existing X12 archives are unchanged."
+            ),
+        )
+        return True
+
     @transaction.atomic
     def handle(self, *args, **options):
+        existing_claim = Claim.objects.select_for_update().filter(claim_number="CLM-DEMO-001").first()
+        if existing_claim and not self._is_seeded_claim(existing_claim):
+            self.stdout.write(self.style.WARNING(
+                "CLM-DEMO-001 has no matching sample provenance; no sample data was changed."
+            ))
+            return
         now = timezone.now()
         update_defaults = {
             "source_name": "EMRTS development reference subset",
@@ -113,101 +171,16 @@ class Command(BaseCommand):
             },
         )
 
-        existing_claim = Claim.objects.filter(claim_number="CLM-DEMO-001").first()
+        # get_or_create preserves an administrator's existing configuration,
+        # including a disabled partner, and never resets interchange counters.
+        ensure_demo_partner()
         if existing_claim:
-            insured = InsuredParty.objects.filter(
-                first_name="Alex",
-                last_name="Morgan",
-                date_of_birth="1985-04-12",
-            ).first()
-            if not insured:
-                insured = InsuredParty.objects.create(
-                    first_name="Alex",
-                    last_name="Morgan",
-                    date_of_birth="1985-04-12",
-                    sex="unknown",
-                    address_line_1="100 Demo Patient Ave",
-                    city="Raleigh",
-                    state="NC",
-                    zip_code="27601",
-                )
-
-            payer = Payer.objects.filter(payer_identifier="CMS-DEMO").first()
-            if not payer:
-                payer = Payer.objects.create(
-                    payer_name="Medicare",
-                    payer_type=Payer.PAYER_TYPE_MEDICARE,
-                    payer_identifier="CMS-DEMO",
-                    medicare_administrative_contractor="Demo MAC",
-                    address_line_1="7500 Demo Payer Drive",
-                    city="Baltimore",
-                    state="MD",
-                    zip_code="21244",
-                    zip_code_extension="1850",
-                )
-            else:
-                payer.payer_name = "Medicare"
-                payer.payer_type = Payer.PAYER_TYPE_MEDICARE
-                payer.medicare_administrative_contractor = "Demo MAC"
-                payer.address_line_1 = "7500 Demo Payer Drive"
-                payer.address_line_2 = ""
-                payer.city = "Baltimore"
-                payer.state = "MD"
-                payer.zip_code = "21244"
-                payer.zip_code_extension = "1850"
-                payer.save()
-
-            insurance_policy = InsurancePolicy.objects.filter(
-                insured_party=insured,
-                payer=payer,
-                member_id="DEMO-MBI-0001",
-                group_number="DEMO-GROUP",
-            ).first()
-            if not insurance_policy:
-                insurance_policy = InsurancePolicy.objects.create(
-                    insured_party=insured,
-                    payer=payer,
-                    member_id="DEMO-MBI-0001",
-                    group_number="DEMO-GROUP",
-                    plan_name="Demo Medicare Professional Coverage",
-                    policy_type=InsurancePolicy.POLICY_TYPE_MEDICARE,
-                    is_active=True,
-                )
-
-            ClaimCoverage.objects.update_or_create(
-                claim=existing_claim,
-                payer_sequence=ClaimCoverage.PAYER_SEQUENCE_PRIMARY,
-                defaults={
-                    "insurance_policy": insurance_policy,
-                    "relationship_to_patient": "self",
-                    "assignment_of_benefits": True,
-                    "release_of_information": True,
-                },
-            )
-            Provider.objects.filter(npi=billing_npi.npi).update(npi_reference=billing_npi)
-            Provider.objects.filter(npi=rendering_npi.npi).update(npi_reference=rendering_npi)
-            existing_claim.diagnoses.filter(diagnosis_code=low_back_pain.code).update(
-                icd10_reference=low_back_pain
-            )
-            rendering_provider = (
-                existing_claim.claim_providers.filter(provider_role=ClaimProvider.ROLE_RENDERING)
-                .select_related("provider")
-                .first()
-            )
-            existing_claim.service_lines.filter(procedure_code=office_visit.code).update(
-                procedure_reference=office_visit,
-                rendering_provider=rendering_provider.provider if rendering_provider else None,
-            )
-            existing_claim.validation_status = "reference_validated"
-            existing_claim.validation_message = (
-                "Fictional sample claim linked to the active development reference subset."
-            )
-            existing_claim.save(update_fields=["validation_status", "validation_message", "updated_at"])
-            self.stdout.write(
-                self.style.WARNING(
-                    "Sample claim CLM-DEMO-001 already exists; reference records were refreshed and linked."
-                )
-            )
+            repaired = self._repair_legacy_billing_fixture(existing_claim)
+            self.stdout.write(self.style.SUCCESS(
+                "Prepared the legacy fictional sample for test 837P generation."
+            ) if repaired else self.style.WARNING(
+                "Sample claim CLM-DEMO-001 already exists; saved claim data was preserved."
+            ))
             return
 
         patient = Patient.objects.create(
@@ -250,11 +223,11 @@ class Command(BaseCommand):
             npi="1234567893",
             npi_reference=billing_npi,
             taxonomy_code="207Q00000X",
-            tax_id="DEMO-TAX-ID",
+            tax_id=self.DEMO_BILLING_EIN,
             address_line_1="200 Demo Provider Blvd",
             city="Durham",
             state="NC",
-            zip_code="27701",
+            zip_code=self.DEMO_BILLING_ZIP,
             phone_number="555-0200",
         )
 
@@ -335,7 +308,7 @@ class Command(BaseCommand):
         ClaimAuditEvent.objects.create(
             claim=claim,
             event_type="sample_created",
-            event_description="Fictional sample claim created by seed_sample_claims command.",
+            event_description=self.SEED_EVENT,
             changed_by="system",
         )
 

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from decimal import Decimal
+import re
 from typing import Optional
 
 from . import codes, formatters
@@ -24,9 +25,7 @@ class Issue:
 
 
 def _payer_postal_code(payer):
-    base = formatters.digits(payer.zip_code)
-    extension = formatters.digits(getattr(payer, "zip_code_extension", ""))
-    return f"{base}{extension}" if base else ""
+    return formatters.us_zip(payer.zip_code, getattr(payer, "zip_code_extension", ""))
 
 
 def validate_billing_provider(billing):
@@ -34,20 +33,29 @@ def validate_billing_provider(billing):
         return [Issue("2010AA", "no billing provider on the claim")]
 
     out = []
-    zip_code = formatters.digits(billing.zip_code)
-    if len(zip_code) != BILLING_ZIP_DIGITS:
+    # 005010X222A1 2010AA N403 requires ZIP+4 for a U.S. billing address.
+    # This requirement does not apply to patient/subscriber/payer ZIP fields.
+    # X12 RFI 989 and 1397 clarify the distinction and wire formatting.
+    zip_code = formatters.us_zip(billing.zip_code)
+    if not zip_code or len(zip_code) != BILLING_ZIP_DIGITS:
         out.append(Issue(
             "2010AA N403",
-            f"billing ZIP '{billing.zip_code}' has {len(zip_code)} digits, "
-            f"{BILLING_ZIP_DIGITS} required",
+            "Billing provider ZIP+4 is required before 837P generation for a U.S. "
+            "billing address. Enter its verified 9-digit ZIP (123456789 or "
+            "12345-6789); a 5-digit ZIP can be saved during capture but is not "
+            "sufficient for this export. Do not add arbitrary digits.",
         ))
 
     npi = formatters.digits(billing.npi)
     if len(npi) != NPI_DIGITS:
         out.append(Issue("2010AA NM109", f"billing NPI '{billing.npi}' is not {NPI_DIGITS} digits"))
 
-    if len(formatters.digits(billing.tax_id)) != 9:
-        out.append(Issue("2010AA REF EI", "billing tax id must contain 9 digits"))
+    if not re.fullmatch(r"(?:[0-9]{9}|[0-9]{2}-[0-9]{7})", str(billing.tax_id or "").strip()):
+        out.append(Issue(
+            "2010AA REF EI",
+            "Billing provider EIN is required before 837P generation. Enter "
+            "9 digits (123456789 or 12-3456789). This exporter uses EIN, not SSN.",
+        ))
 
     if not formatters.clean(billing.address_line_1):
         out.append(Issue("2010AA N301", "billing street address is empty"))
@@ -72,11 +80,11 @@ def validate_payer(payer):
 
     postal = _payer_postal_code(payer)
     if not postal:
-        out.append(Issue("2010BB N403", "payer ZIP is empty"))
-    elif len(postal) not in PAYER_ZIP_DIGITS:
         out.append(Issue(
             "2010BB N403",
-            f"payer ZIP '{postal}' has {len(postal)} digits, 5 or 9 required",
+            "Payer ZIP must contain 5 or 9 digits (12345, 123456789 or "
+            "12345-6789). The separate +4 field is optional; if supplied, "
+            "use a 5-digit ZIP and a 4-digit extension.",
         ))
     return out
 
@@ -93,8 +101,22 @@ def validate_subscriber(context):
     insured = context.insured
     if not all(formatters.clean(v) for v in (insured.address_line_1, insured.city, insured.state)):
         out.append(Issue("2010BA N3/N4", "subscriber street, city and state are required"))
-    if len(formatters.digits(insured.zip_code)) not in (5, 9):
-        out.append(Issue("2010BA N403", "subscriber ZIP must have 5 or 9 digits"))
+    if not formatters.us_zip(insured.zip_code):
+        out.append(Issue("2010BA N403", "Subscriber ZIP must have 5 or 9 digits (12345, 123456789 or 12345-6789); ZIP+4 is optional."))
+    return out
+
+
+def validate_patient(context):
+    # The separate 2010CA loop is emitted only for a dependent patient.
+    # When patient and subscriber are the same, 2010BA is validated above.
+    if context.patient_is_subscriber:
+        return []
+    patient = context.claim.patient
+    out = []
+    if not all(formatters.clean(v) for v in (patient.address_line_1, patient.city, patient.state)):
+        out.append(Issue("2010CA N3/N4", "Patient street, city and state are required."))
+    if not formatters.us_zip(patient.zip_code):
+        out.append(Issue("2010CA N403", "Patient ZIP must have 5 or 9 digits (12345, 123456789 or 12345-6789); ZIP+4 is optional."))
     return out
 
 
@@ -200,6 +222,7 @@ def validate(context):
     out.extend(validate_billing_provider(context.billing))
     out.extend(validate_payer(context.payer))
     out.extend(validate_subscriber(context))
+    out.extend(validate_patient(context))
     out.extend(validate_diagnoses(context))
     out.extend(validate_totals(context))
 

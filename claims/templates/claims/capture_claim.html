@@ -159,7 +159,7 @@
                 <div class="form-field full-width">{{ form.patient_address_line_2.label_tag }}{{ form.patient_address_line_2 }}{{ form.patient_address_line_2.errors }}</div>
                 <div class="form-field">{{ form.patient_city.label_tag }}{{ form.patient_city }}{{ form.patient_city.errors }}</div>
                 <div class="form-field">{{ form.patient_state.label_tag }}{{ form.patient_state }}{{ form.patient_state.errors }}</div>
-                <div class="form-field">{{ form.patient_zip_code.label_tag }}{{ form.patient_zip_code }}{{ form.patient_zip_code.errors }}</div>
+                <div class="form-field">{{ form.patient_zip_code.label_tag }}{{ form.patient_zip_code }}<span class="helptext" id="id_patient_zip_code_helptext">{{ form.patient_zip_code.help_text }}</span>{{ form.patient_zip_code.errors }}</div>
             </div>
         </section>
 
@@ -181,7 +181,7 @@
                 <div class="form-field full-width">{{ form.insured_address_line_2.label_tag }}{{ form.insured_address_line_2 }}{{ form.insured_address_line_2.errors }}</div>
                 <div class="form-field">{{ form.insured_city.label_tag }}{{ form.insured_city }}{{ form.insured_city.errors }}</div>
                 <div class="form-field">{{ form.insured_state.label_tag }}{{ form.insured_state }}{{ form.insured_state.errors }}</div>
-                <div class="form-field">{{ form.insured_zip_code.label_tag }}{{ form.insured_zip_code }}<span class="helptext">Use a 5-digit ZIP or ZIP+4, such as 27701-1234.</span>{{ form.insured_zip_code.errors }}</div>
+                <div class="form-field">{{ form.insured_zip_code.label_tag }}{{ form.insured_zip_code }}<span class="helptext" id="id_insured_zip_code_helptext">{{ form.insured_zip_code.help_text }}</span>{{ form.insured_zip_code.errors }}</div>
             </div>
         </section>
 
@@ -218,7 +218,7 @@
                 <div class="form-field">{{ form.payer_city.label_tag }}{{ form.payer_city }}{{ form.payer_city.errors }}</div>
                 <div class="form-field">{{ form.payer_state.label_tag }}{{ form.payer_state }}{{ form.payer_state.errors }}</div>
                 <div class="form-field">{{ form.payer_zip_code.label_tag }}{{ form.payer_zip_code }}{{ form.payer_zip_code.errors }}</div>
-                <div class="form-field">{{ form.payer_zip_code_extension.label_tag }}{{ form.payer_zip_code_extension }}{{ form.payer_zip_code_extension.errors }}</div>
+                <div class="form-field">{{ form.payer_zip_code_extension.label_tag }}{{ form.payer_zip_code_extension }}<span class="helptext" id="id_payer_zip_code_extension_helptext">{{ form.payer_zip_code_extension.help_text }}</span>{{ form.payer_zip_code_extension.errors }}</div>
             </div>
         </section>
 
@@ -228,11 +228,11 @@
                 <div class="form-field full-width">{{ form.billing_provider_name.label_tag }}{{ form.billing_provider_name }}{{ form.billing_provider_name.errors }}</div>
                 <div class="form-field">{{ form.billing_provider_npi.label_tag }}{{ form.billing_provider_npi }}{% if form.billing_provider_npi.help_text %}<span class="helptext">{{ form.billing_provider_npi.help_text }}</span>{% endif %}{{ form.billing_provider_npi.errors }}</div>
                 <div class="form-field">{{ form.billing_provider_taxonomy_code.label_tag }}{{ form.billing_provider_taxonomy_code }}{{ form.billing_provider_taxonomy_code.errors }}</div>
-                <div class="form-field">{{ form.billing_provider_tax_id.label_tag }}{{ form.billing_provider_tax_id }}{{ form.billing_provider_tax_id.errors }}</div>
+                <div class="form-field">{{ form.billing_provider_tax_id.label_tag }}{{ form.billing_provider_tax_id }}<span class="helptext" id="id_billing_provider_tax_id_helptext">{{ form.billing_provider_tax_id.help_text }}</span>{{ form.billing_provider_tax_id.errors }}</div>
                 <div class="form-field full-width">{{ form.billing_provider_address_line_1.label_tag }}{{ form.billing_provider_address_line_1 }}{{ form.billing_provider_address_line_1.errors }}</div>
                 <div class="form-field">{{ form.billing_provider_city.label_tag }}{{ form.billing_provider_city }}{{ form.billing_provider_city.errors }}</div>
                 <div class="form-field">{{ form.billing_provider_state.label_tag }}{{ form.billing_provider_state }}{{ form.billing_provider_state.errors }}</div>
-                <div class="form-field">{{ form.billing_provider_zip_code.label_tag }}{{ form.billing_provider_zip_code }}{{ form.billing_provider_zip_code.errors }}</div>
+                <div class="form-field">{{ form.billing_provider_zip_code.label_tag }}{{ form.billing_provider_zip_code }}<span class="helptext" id="id_billing_provider_zip_code_helptext">{{ form.billing_provider_zip_code.help_text }}</span>{{ form.billing_provider_zip_code.errors }}</div>
                 <div class="form-field">{{ form.rendering_provider_first_name.label_tag }}{{ form.rendering_provider_first_name }}{{ form.rendering_provider_first_name.errors }}</div>
                 <div class="form-field">{{ form.rendering_provider_last_name.label_tag }}{{ form.rendering_provider_last_name }}{{ form.rendering_provider_last_name.errors }}</div>
                 <div class="form-field">{{ form.rendering_provider_npi.label_tag }}{{ form.rendering_provider_npi }}{% if form.rendering_provider_npi.help_text %}<span class="helptext">{{ form.rendering_provider_npi.help_text }}</span>{% endif %}{{ form.rendering_provider_npi.errors }}</div>

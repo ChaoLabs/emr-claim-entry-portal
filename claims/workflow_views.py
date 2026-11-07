@@ -44,7 +44,8 @@ def submission(request, claim_id):
     partners = TradingPartner.objects.filter(is_active=True)
     initial = {"partner": partners.first()} if partners.count() == 1 else {}
     form = GenerateForm(request.POST or None, initial=initial)
-    issues = validators.validate(context.build(claim))
+    ctx = context.build(claim)
+    issues = validators.validate(ctx)
     if request.method == "POST" and form.is_valid():
         # Re-read under a row lock so generation always screens current DB data.
         with transaction.atomic():
@@ -76,6 +77,8 @@ def submission(request, claim_id):
                 return redirect("workflow:document", document_id=archived.pk)
     return render(request, "claims/submission.html", {
         "claim": claim, "form": form, "issues": issues, "archives": archives_for(claim),
+        "has_partners": partners.exists(), "billing_provider": ctx.billing,
+        "billing_needs_review": any(issue.tag.startswith("2010AA") for issue in issues),
     })
 
 

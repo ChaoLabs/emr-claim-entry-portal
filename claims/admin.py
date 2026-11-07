@@ -1,3 +1,4 @@
+from django import forms
 from django.contrib import admin
 
 from .models import (
@@ -174,8 +175,19 @@ class ClaimCoverageAdmin(admin.ModelAdmin):
     ordering = ("claim", "payer_sequence")
 
 
+class ProviderAdminForm(forms.ModelForm):
+    class Meta:
+        model = Provider
+        fields = "__all__"
+        help_texts = {
+            "zip_code": "For a US billing provider, 837P generation requires the verified 9-digit ZIP+4. You may save 5 digits until it is available; do not guess or append zeros.",
+            "tax_id": "The current 837P exporter uses EIN (qualifier EI): 9 digits, optionally formatted 12-3456789. Do not use an NPI or a placeholder.",
+        }
+
+
 @admin.register(Provider)
 class ProviderAdmin(admin.ModelAdmin):
+    form = ProviderAdminForm
     list_display = (
         "organization_name",
         "last_name",

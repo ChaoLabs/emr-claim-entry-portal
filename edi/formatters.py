@@ -1,4 +1,5 @@
 from decimal import Decimal
+import re
 
 ELEMENT = "*"
 COMPOSITE = ":"
@@ -26,6 +27,25 @@ def diagnosis(value):
 
 def digits(text):
     return "".join(ch for ch in str(text or "") if ch.isdigit())
+
+
+def us_zip(value, extension=""):
+    """Normalize a supported U.S. ZIP only after validating its entire value.
+
+    This checks syntax, not whether USPS assigns the code to an address.
+    Return None for missing or malformed values; never invent a ZIP+4 or
+    remove letters to make an invalid value appear valid. A separate +4 field
+    is accepted only with a five-digit base.
+    """
+    base = str(value or "").strip()
+    extra = str(extension or "").strip()
+    if extra:
+        if re.fullmatch(r"[0-9]{5}", base) and re.fullmatch(r"[0-9]{4}", extra):
+            return base + extra
+        return None
+    if re.fullmatch(r"(?:[0-9]{5}|[0-9]{9}|[0-9]{5}-[0-9]{4})", base):
+        return base.replace("-", "")
+    return None
 
 
 def d8(value):

@@ -162,7 +162,10 @@ class CMS1500CaptureForm(forms.Form):
     patient_address_line_2 = forms.CharField(label="Patient Address Line 2", max_length=255, required=False)
     patient_city = forms.CharField(label="Patient City", max_length=100, required=False)
     patient_state = forms.CharField(label="Patient State", max_length=2, required=False)
-    patient_zip_code = forms.CharField(label="Patient ZIP Code", max_length=20, required=False)
+    patient_zip_code = forms.CharField(
+        label="Patient ZIP Code", max_length=20, required=False,
+        help_text="5 digits are accepted. The ZIP+4 extension is optional.",
+    )
     patient_phone_number = forms.CharField(label="Patient Phone Number", max_length=30, required=False)
 
     # Insured / subscriber information
@@ -192,7 +195,7 @@ class CMS1500CaptureForm(forms.Form):
     insured_state = forms.CharField(label="Subscriber State", max_length=2, required=False)
     insured_zip_code = forms.CharField(
         label="Subscriber ZIP Code", max_length=20, required=False,
-        help_text="5 digits or ZIP+4, for example 27701 or 27701-1234.",
+        help_text="5 digits are accepted. The ZIP+4 extension is optional.",
     )
 
     # Coverage / policy information
@@ -265,11 +268,12 @@ class CMS1500CaptureForm(forms.Form):
         widget=forms.TextInput(attrs={"inputmode": "numeric"}),
     )
     payer_zip_code_extension = forms.CharField(
-        label="Payer ZIP+4 Extension (4 digits)",
+        label="Payer ZIP+4 Extension (optional)",
         min_length=4,
         max_length=4,
         required=False,
         validators=[PAYER_ZIP_CODE_EXTENSION_VALIDATOR],
+        help_text="Leave blank if unknown; a 5-digit payer ZIP is accepted.",
         widget=forms.TextInput(attrs={"inputmode": "numeric"}),
     )
 
@@ -286,7 +290,10 @@ class CMS1500CaptureForm(forms.Form):
         max_length=20,
         required=False,
     )
-    billing_provider_tax_id = forms.CharField(label="Billing Provider Tax ID", max_length=50, required=False)
+    billing_provider_tax_id = forms.CharField(
+        label="Billing Provider Tax ID (EIN)", max_length=50, required=False,
+        help_text="Required before 837P generation: 9 digits, with or without the EIN hyphen. This exporter uses EIN (EI).",
+    )
     billing_provider_address_line_1 = forms.CharField(
         label="Billing Provider Address Line 1",
         max_length=255,
@@ -294,7 +301,10 @@ class CMS1500CaptureForm(forms.Form):
     )
     billing_provider_city = forms.CharField(label="Billing Provider City", max_length=100, required=False)
     billing_provider_state = forms.CharField(label="Billing Provider State", max_length=2, required=False)
-    billing_provider_zip_code = forms.CharField(label="Billing Provider ZIP Code", max_length=20, required=False)
+    billing_provider_zip_code = forms.CharField(
+        label="Billing Provider ZIP / ZIP+4", max_length=20, required=False,
+        help_text="You may save 5 digits now. Before generating a US 837P, provide the billing address's verified ZIP+4 (9 digits). Do not guess the extension.",
+    )
 
     rendering_provider_first_name = forms.CharField(
         label="Rendering Provider First Name",
@@ -334,6 +344,25 @@ class CMS1500CaptureForm(forms.Form):
 
     def clean_payer_state(self):
         return self.cleaned_data["payer_state"].upper()
+
+    def _clean_optional_us_zip(self, field_name):
+        value = self.cleaned_data[field_name]
+        if value and not re.fullmatch(r"(?:[0-9]{5}|[0-9]{9}|[0-9]{5}-[0-9]{4})", value):
+            raise forms.ValidationError("Enter a 5-digit ZIP or ZIP+4 (9 digits, with an optional hyphen after the first 5).")
+        return value
+
+    def clean_patient_zip_code(self):
+        return self._clean_optional_us_zip("patient_zip_code")
+
+    def clean_billing_provider_zip_code(self):
+        # Capture is intentionally less strict than electronic submission.
+        return self._clean_optional_us_zip("billing_provider_zip_code")
+
+    def clean_billing_provider_tax_id(self):
+        value = self.cleaned_data["billing_provider_tax_id"]
+        if value and not re.fullmatch(r"[0-9]{2}-?[0-9]{7}", value):
+            raise forms.ValidationError("Enter a 9-digit EIN (123456789 or 12-3456789), or leave blank until it is available.")
+        return value
 
     def clean(self):
         cleaned_data = super().clean()

@@ -1,7 +1,7 @@
 from django.test import TestCase
-from django.urls import reverse
 
 from . import tests as existing
+from .capture_test_helpers import submit_new_claim
 from .models import Claim, Icd10Code
 
 
@@ -19,7 +19,7 @@ class DynamicCaptureTests(TestCase):
             payload[f'diagnoses-{index}-diagnosis_code'] = code
         payload['service_lines-0-diagnosis_refs'] = ['5', '0', '3', '1', '2', '4']
         payload['service_lines-0-modifier_codes'] = ['25', '59', 'KX', 'GT', '95', 'GA']
-        response = self.client.post(reverse('claims:capture_claim'), payload)
+        response = submit_new_claim(self.client, payload)
         self.assertEqual(response.status_code, 302)
         claim = Claim.objects.get(claim_number=payload['claim_number'])
         line = claim.service_lines.get()
@@ -31,13 +31,13 @@ class DynamicCaptureTests(TestCase):
         payload = self._capture_payload()
         payload.update({'diagnoses-TOTAL_FORMS': '2', 'diagnoses-0-DELETE': 'on',
                         'diagnoses-1-diagnosis_code': 'M54.50'})
-        response = self.client.post(reverse('claims:capture_claim'), payload)
+        response = submit_new_claim(self.client, payload)
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'A selected diagnosis may have been removed')
         self.assertContains(response, 'Unavailable diagnosis')
         self.assertFalse(Claim.objects.filter(claim_number=payload['claim_number']).exists())
         payload['service_lines-0-diagnosis_refs'] = ['1']
-        response = self.client.post(reverse('claims:capture_claim'), payload)
+        response = submit_new_claim(self.client, payload)
         self.assertEqual(response.status_code, 302)
         line = Claim.objects.get(claim_number=payload['claim_number']).service_lines.get()
         self.assertEqual(line.diagnosis_pointers, [1])
@@ -47,7 +47,7 @@ class DynamicCaptureTests(TestCase):
         payload = self._capture_payload()
         payload['service_lines-TOTAL_FORMS'] = '2'
         payload.update(self._service_line_payload(1))
-        response = self.client.post(reverse('claims:capture_claim'), payload)
+        response = submit_new_claim(self.client, payload)
         self.assertEqual(response.status_code, 302)
         claim = Claim.objects.get(claim_number=payload['claim_number'])
         self.assertEqual(claim.diagnoses.count(), 1)
@@ -58,32 +58,32 @@ class DynamicCaptureTests(TestCase):
             with self.subTest(refs=refs):
                 payload = self._capture_payload()
                 payload['service_lines-0-diagnosis_refs'] = refs
-                response = self.client.post(reverse('claims:capture_claim'), payload)
+                response = submit_new_claim(self.client, payload)
                 self.assertEqual(response.status_code, 200)
                 self.assertFalse(Claim.objects.filter(claim_number=payload['claim_number']).exists())
 
     def test_invalid_duplicate_modifiers_preserve_other_values(self):
         payload = self._capture_payload()
         payload['service_lines-0-modifier_codes'] = ['25', 'bad']
-        response = self.client.post(reverse('claims:capture_claim'), payload)
+        response = submit_new_claim(self.client, payload)
         self.assertContains(response, 'Each modifier must contain two letters or digits.')
         self.assertContains(response, 'value="25"')
         self.assertContains(response, 'value="bad"')
         self.assertFalse(Claim.objects.filter(claim_number=payload['claim_number']).exists())
         payload['service_lines-0-modifier_codes'] = ['25', '25']
-        response = self.client.post(reverse('claims:capture_claim'), payload)
+        response = submit_new_claim(self.client, payload)
         self.assertContains(response, 'Enter each modifier only once')
 
     def test_duplicate_claim_diagnosis_is_rejected(self):
         payload = self._capture_payload()
         payload.update({'diagnoses-TOTAL_FORMS': '2', 'diagnoses-1-diagnosis_code': 'R51.9'})
-        response = self.client.post(reverse('claims:capture_claim'), payload)
+        response = submit_new_claim(self.client, payload)
         self.assertContains(response, 'This diagnosis is already on the claim')
         self.assertFalse(Claim.objects.filter(claim_number=payload['claim_number']).exists())
 
     def test_management_form_tampering_rejected(self):
         payload = self._capture_payload()
         payload.pop('diagnoses-TOTAL_FORMS')
-        response = self.client.post(reverse('claims:capture_claim'), payload)
+        response = submit_new_claim(self.client, payload)
         self.assertEqual(response.status_code, 200)
         self.assertFalse(Claim.objects.filter(claim_number=payload['claim_number']).exists())

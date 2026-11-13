@@ -1,5 +1,6 @@
 import uuid
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, RegexValidator
 from django.db import models
@@ -685,3 +686,40 @@ class ClaimAuditEvent(models.Model):
 
     def __str__(self):
         return f"{self.claim} - {self.event_type}"
+
+
+class CaptureDraft(TimeStampedModel):
+    """An incomplete form belongs to a login or a private browser session."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="capture_drafts",
+    )
+    session_owner = models.CharField(max_length=32, editable=False, blank=True, default="")
+    payload = models.JSONField(default=dict, blank=True)
+    version = models.PositiveIntegerField(default=1)
+    claim = models.OneToOneField(
+        Claim, null=True, blank=True, on_delete=models.CASCADE, related_name="capture_draft",
+    )
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["owner", "claim", "-updated_at"], name="draft_owner_claim_updated"),
+            models.Index(fields=["session_owner", "claim", "-updated_at"], name="draft_session_claim_updated",
+                         condition=models.Q(owner__isnull=True)),
+        ]
+        constraints = [models.CheckConstraint(
+            condition=(models.Q(owner__isnull=False, session_owner="") |
+                       (models.Q(owner__isnull=True) & ~models.Q(session_owner=""))),
+            name="capture_draft_has_one_owner",
+        )]
+
+    @property
+    def display_name(self):
+        def value(key):
+            return next(iter(self.payload.get(key, [])), "").strip()
+
+        return (value("claim_number") or " ".join(filter(None, (
+            value("patient_first_name"), value("patient_last_name"),
+        ))) or "Untitled draft")[:100]

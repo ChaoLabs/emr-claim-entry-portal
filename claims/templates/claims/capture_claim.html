@@ -1,6 +1,6 @@
 {% extends "claims/base.html" %}
 
-{% block title %}New CMS-1500 Claim | EMRTS Claim Entry Portal{% endblock %}
+{% block title %}{% if draft %}Edit draft{% else %}New CMS-1500 Claim{% endif %} | EMRTS Claim Entry Portal{% endblock %}
 
 {% block content %}
 <style>
@@ -72,6 +72,7 @@
 .claim-capture .add-service-line { display:inline-flex; background:white; border:1px solid #bbd6de; color:var(--primary); padding:9px 13px; border-radius:4px; cursor:pointer; font:inherit; font-size:12px; font-weight:600; }
 .claim-capture .export-note { font-size:11px; line-height:1.7; color:var(--muted); margin:17px 0 0; }
 .claim-capture .form-actions { border-top:1px solid var(--border); padding:20px 0 0; margin-top:25px; display:flex; justify-content:flex-end; align-items:center; gap:20px; }
+.claim-capture .capture-buttons { display:flex; gap:8px; }
 .claim-capture .form-actions .muted { margin-right:auto; font-size:12px; text-decoration:none; }
 .claim-capture .form-actions p { color:var(--muted); font-size:11px; margin:0; }
 .claim-capture input:focus,.claim-capture select:focus,.claim-capture button:focus-visible,.claim-capture a:focus-visible { outline:2px solid #49a2b4; outline-offset:3px; }
@@ -81,9 +82,12 @@
 </style>
 
 <div class="claim-capture">
-    <div class="capture-breadcrumb"><a href="{% url 'claims:dashboard' %}">Claims</a><span aria-hidden="true">/</span><span>New claim</span></div>
-    <div class="capture-heading"><div><div class="capture-eyebrow">Claim preparation</div><h2>New claim</h2><p>Capture the patient, coverage and services. Then review the claim before preparing an 837P file.</p></div><ol class="capture-steps" aria-label="Claim preparation steps"><li aria-current="step"><span>1</span>Enter details</li><li><span>2</span>Review claim</li><li><span>3</span>Prepare 837P</li></ol></div>
-    <div class="validation-note"><strong>Development reference data.</strong> NPI, diagnosis and procedure codes are checked when you save. Use fictional patient information only.</div>
+    <div class="capture-breadcrumb"><a href="{% url 'claims:dashboard' %}">Claims</a><span aria-hidden="true">/</span><span>{% if draft %}Edit draft{% else %}New claim{% endif %}</span></div>
+    <div class="capture-heading"><div><div class="capture-eyebrow">Claim preparation</div><h2>{% if draft %}Edit draft{% else %}New claim{% endif %}</h2><p>Save your progress{% if request.user.is_authenticated %} to your account{% else %} in this browser session{% endif %}. When the claim is complete, submit it for review. <a href="#capture-actions">Go to Save and Submit</a></p>{% if draft %}<p>Last saved {{ draft.updated_at|date:"M j, Y · H:i T" }}</p>{% endif %}</div><ol class="capture-steps" aria-label="Claim preparation steps"><li aria-current="step"><span>1</span>Enter details</li><li><span>2</span>Review claim</li><li><span>3</span>Prepare 837P</li></ol></div>
+    <div class="validation-note"><strong>Use fictional patient information only.</strong> Provider, diagnosis and procedure codes are checked when you submit.</div>
+    {% if draft_conflict %}
+    <div class="form-error-summary" role="alert"><h3>This form is out of date</h3><p>{{ draft_conflict }}</p>{% if draft %}<a href="{% url 'claims:resume_draft' draft.id %}" target="_blank" rel="noopener">Open the latest version in a new tab</a>{% endif %}</div>
+    {% endif %}
     {% if capture_has_errors %}
         <div class="form-error-summary" role="alert" aria-labelledby="form-error-heading">
             <h3 id="form-error-heading">Review the highlighted claim fields</h3>
@@ -121,6 +125,8 @@
 
     <form method="post" novalidate id="capture-form">
         {% csrf_token %}
+        <input type="hidden" name="draft_token" value="{{ draft_token }}">
+        <input type="hidden" name="draft_version" value="{{ draft_version }}">
         {{ service_line_formset.management_form }}
         {{ diagnosis_formset.management_form }}
         <div class="capture-layout">
@@ -265,10 +271,13 @@
             </template>
         </section>
 
-        <div class="form-actions">
-            <a href="{% url 'claims:dashboard' %}" class="muted">Cancel</a>
-            <p>Next: review the saved claim as a table.</p>
-            <button type="submit" class="button">Save Claim <span aria-hidden="true">&rarr;</span></button>
+        <div class="form-actions" id="capture-actions" tabindex="-1">
+            <a href="{% url 'claims:dashboard' %}" class="muted">Back to claims</a>
+            <p>Submit moves this claim to review. It does not send a file to a payer.</p>
+            <div class="capture-buttons">
+                <button type="submit" name="action" value="save" class="button secondary" formnovalidate{% if draft_conflict %} disabled{% endif %}>Save</button>
+                <button type="submit" name="action" value="submit" class="button"{% if draft_conflict %} disabled{% endif %}>Submit <span aria-hidden="true">&rarr;</span></button>
+            </div>
         </div>
             </div>
         </div>
@@ -292,6 +301,15 @@
             input.setAttribute('aria-required', String(input.required));
         });
     };
+    // Keep unfinished subscriber fields in a draft even when the patient is selected.
+    // For Submit the normal, disabled-field behavior still applies.
+    form.addEventListener('formdata', ({ formData }) => {
+        if (formData.get('action') === 'save' && sameSubscriber.checked) {
+            subscriberDetails.querySelectorAll('input:disabled,select:disabled').forEach(input => {
+                if (input.name && !formData.has(input.name)) formData.append(input.name, input.value);
+            });
+        }
+    });
     sameSubscriber.setAttribute('aria-controls', 'subscriber-details');
     sameSubscriber.addEventListener('change', refreshSubscriber);
     refreshSubscriber();
@@ -352,7 +370,7 @@
     const addForm = (prefix, container, templateId) => {
         const count = document.getElementById(`id_${prefix}-TOTAL_FORMS`);
         const index = Number(count.value);
-        if (index >= 200) { notice.textContent = 'This claim has reached the form size limit. Save it before adding more.'; return; }
+        if (index >= 200) { notice.textContent = 'This claim has reached the form size limit.'; return; }
         container.insertAdjacentHTML('beforeend', document.getElementById(templateId).innerHTML.replaceAll('__prefix__', String(index)));
         count.value = index + 1;
         refresh();
@@ -367,7 +385,7 @@
         if (button.hasAttribute('data-remove-diagnosis') && activeDiagnoses().length > 1) {
             const row = button.closest('[data-diagnosis-form]');
             row.querySelector('[name$="-DELETE"]').value = 'on'; row.hidden = true;
-            notice.textContent = 'Diagnosis removed. Update any service line that used it before saving.';
+            notice.textContent = 'Diagnosis removed. Update any service line that used it before submitting.';
             refresh();
         }
         if (button.hasAttribute('data-remove-service-line') && activeLines().length > 1) {
@@ -389,6 +407,15 @@
             refreshValues();
         }
     });
+    const warnOnLeave = event => { event.preventDefault(); event.returnValue = ''; };
+    const markDirty = () => window.addEventListener('beforeunload', warnOnLeave);
+    form.addEventListener('input', markDirty);
+    form.addEventListener('change', markDirty);
+    form.addEventListener('click', event => {
+        if (event.target.closest('#add-diagnosis,#add-service-line,[data-remove-diagnosis],[data-remove-service-line],[data-add-value],[data-remove-value]')) markDirty();
+    });
+    {% if capture_has_errors or draft_conflict %}markDirty();{% endif %}
+    form.addEventListener('submit', () => window.removeEventListener('beforeunload', warnOnLeave));
     if ('IntersectionObserver' in window) {
         const sectionLinks = [...form.querySelectorAll('.capture-contents a')];
         const observer = new IntersectionObserver(entries => {

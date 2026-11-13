@@ -2,15 +2,20 @@ import uuid
 from decimal import Decimal
 
 from django.contrib import messages
-from django.db import transaction
+from django.db import IntegrityError, transaction
+from django.http import HttpResponseBadRequest
+from django.views.decorators.cache import never_cache
+from django.views.decorators.http import require_http_methods
 from django.db.models import Q
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from edi import context as edi_context, validators as edi_validators
 
+from . import drafts
 from .forms import CMS1500CaptureForm, DiagnosisCaptureFormSet, ServiceLineCaptureFormSet
 from .models import (
+    CaptureDraft,
     Claim,
     ClaimAuditEvent,
     ClaimCoverage,
@@ -31,7 +36,12 @@ from .models import (
 )
 
 
+@never_cache
 def dashboard(request):
+    saved = CaptureDraft.objects.filter(
+        **drafts.owner_fields(drafts.owner_key(request)), claim__isnull=True,
+    ).order_by("-updated_at", "pk")
+    draft_page = Paginator(saved, 10).get_page(request.GET.get("draft_page"))
     claims = (
         Claim.objects.select_related("patient")
         .prefetch_related("coverages__insurance_policy__payer")
@@ -53,6 +63,9 @@ def dashboard(request):
         "query": query,
         "status": status,
         "status_choices": Claim.STATUS_CHOICES,
+        "saved_drafts": draft_page.object_list,
+        "saved_draft_count": draft_page.paginator.count,
+        "draft_page": draft_page,
         "claim_count": Claim.objects.count(),
         "draft_count": Claim.objects.filter(status=Claim.STATUS_DRAFT).count(),
         "ready_for_review_count": Claim.objects.filter(status=Claim.STATUS_READY_FOR_REVIEW).count(),
@@ -115,45 +128,126 @@ def claim_detail(request, claim_id):
     })
 
 
-def capture_claim(request):
-    data = request.POST if request.method == "POST" else None
+def _capture_forms(data=None):
     form = CMS1500CaptureForm(data)
-    diagnosis_formset = DiagnosisCaptureFormSet(data, prefix="diagnoses")
-    diagnosis_choices = []
+    diagnoses = DiagnosisCaptureFormSet(data, prefix="diagnoses")
+    choices = []
     if data is not None:
-        diagnoses_valid = diagnosis_formset.is_valid()
-        for index, diagnosis_form in enumerate(diagnosis_formset):
-            cleaned = diagnosis_form.cleaned_data
-            if cleaned.get("diagnosis_code") and not cleaned.get("DELETE"):
-                code = cleaned["diagnosis_code"]
-                reference = Icd10Code.objects.filter(code=code).first()
-                description = cleaned.get("description") or (reference.short_description if reference else "")
-                diagnosis_choices.append((str(index), f"{code} — {description}" if description else code))
-    service_line_formset = ServiceLineCaptureFormSet(
-        data, prefix="service_lines", form_kwargs={"diagnosis_choices": diagnosis_choices},
+        diagnoses.is_valid()
+        active = [(i, f.cleaned_data) for i, f in enumerate(diagnoses)
+                  if f.cleaned_data.get("diagnosis_code") and not f.cleaned_data.get("DELETE")]
+        codes = [row["diagnosis_code"] for _, row in active if not row.get("description")]
+        descriptions = dict(Icd10Code.objects.filter(code__in=codes, is_active=True)
+                            .values_list("code", "short_description"))
+        for i, row in active:
+            code = row["diagnosis_code"]
+            label = row.get("description") or descriptions.get(code)
+            choices.append((str(i), f"{code} — {label}" if label else code))
+    lines = ServiceLineCaptureFormSet(
+        data, prefix="service_lines", form_kwargs={"diagnosis_choices": choices},
     )
-    if data is not None:
-        form_valid = form.is_valid()
-        lines_valid = service_line_formset.is_valid()
-        if form_valid and diagnoses_valid and lines_valid:
-            diagnoses = [
-                {**f.cleaned_data, "row_key": str(index)}
-                for index, f in enumerate(diagnosis_formset)
-                if f.cleaned_data and not f.cleaned_data.get("DELETE")
+    return form, diagnoses, lines
+
+
+@never_cache
+@require_http_methods(["GET", "POST"])
+def capture_claim(request, draft_id=None):
+    owner = drafts.owner_key(request, create=request.method == "GET" and draft_id is None)
+    owned = CaptureDraft.objects.filter(**drafts.owner_fields(owner))
+    draft = get_object_or_404(owned, pk=draft_id) if draft_id else None
+
+    def render_form(forms, key, version, *, errors=False, conflict=""):
+        form, diagnoses, lines = forms
+        return render(request, "claims/capture_claim.html", {
+            "form": form, "diagnosis_formset": diagnoses, "service_line_formset": lines,
+            "draft": draft, "draft_token": drafts.form_token(owner, key),
+            "draft_version": version, "capture_has_errors": errors, "draft_conflict": conflict,
+        }, status=409 if conflict else 200)
+
+    if request.method == "GET":
+        if draft and draft.claim_id:
+            return redirect("claims:claim_detail", claim_id=draft.claim_id)
+        if draft:
+            return render_form(drafts.resumed_forms(draft.payload), draft.pk, draft.version)
+        return render_form(_capture_forms(), uuid.uuid4(), 0)
+
+    data = request.POST
+    if data.getlist("action") not in (["save"], ["submit"]):
+        return HttpResponseBadRequest("Choose Save or Submit on the claim form.")
+    try:
+        key, version = drafts.read_identity(data, owner, draft_id)
+    except ValueError as exc:
+        return HttpResponseBadRequest(str(exc))
+
+    if draft is None:
+        draft = owned.filter(pk=key).first()
+
+    def conflict_or_replay():
+        if draft and draft.claim_id:
+            messages.info(request, "This claim has already been submitted for review.")
+            return redirect("claims:claim_detail", claim_id=draft.claim_id)
+        if draft is None:
+            return HttpResponseBadRequest("This draft is no longer available. Open the dashboard.")
+        try:
+            current_input = drafts.resumed_forms(drafts.snapshot(data))
+        except ValueError as exc:
+            return HttpResponseBadRequest(str(exc))
+        return render_form(current_input, key, version, conflict=(
+            "Your changes were not saved. Another tab saved a newer version. "
+            "Open the latest draft before making further changes."
+        ))
+
+    if (draft and (draft.claim_id or draft.version != version)) or (not draft and version != 0):
+        return conflict_or_replay()
+
+    make_claim = None
+    if data["action"] == "submit":
+        form, diagnoses, lines = _capture_forms(data)
+        # Evaluate all three so a single response shows every field that needs attention.
+        valid = [part.is_valid() for part in (form, diagnoses, lines)]
+        if not all(valid):
+            # Concurrent first Submit may have committed while validation queried
+            # the claim number. A replay must open that same submitted claim.
+            replay = owned.filter(pk=key, claim__isnull=False).values_list("claim_id", flat=True).first()
+            if replay:
+                return redirect("claims:claim_detail", claim_id=replay)
+            return render_form((form, diagnoses, lines), key, version, errors=True)
+
+        def make_claim():
+            diagnosis_rows = [
+                {**row.cleaned_data, "row_key": str(i)}
+                for i, row in enumerate(diagnoses)
+                if row.cleaned_data and not row.cleaned_data.get("DELETE")
             ]
-            lines = [f.cleaned_data for f in service_line_formset if f.cleaned_data and not f.cleaned_data.get("DELETE")]
-            claim = _save_capture_form(form.cleaned_data, lines, diagnoses)
-            messages.success(request, f"Claim {claim.claim_number or claim.id} was captured successfully.")
-            return redirect("claims:claim_detail", claim_id=claim.id)
-    return render(request, "claims/capture_claim.html", {
-        "form": form, "diagnosis_formset": diagnosis_formset,
-        "service_line_formset": service_line_formset,
-        "capture_has_errors": data is not None,
-    })
+            line_rows = [row.cleaned_data for row in lines if row.cleaned_data and not row.cleaned_data.get("DELETE")]
+            return _save_capture_form(form.cleaned_data, line_rows, diagnosis_rows, actor=request.user.get_username() or "portal")
+
+    try:
+        payload = drafts.snapshot(data)
+    except ValueError as exc:
+        return HttpResponseBadRequest(str(exc))
+    try:
+        claim = drafts.apply_action(owner, key, version, payload, make_claim)
+    except drafts.ChangedDraft:
+        draft = owned.filter(pk=key).first()
+        return conflict_or_replay()
+    except IntegrityError:
+        # Another independent draft can claim this number between form validation
+        # and the database's unique check. The transaction has already rolled back.
+        number = form.cleaned_data.get("claim_number") if make_claim else None
+        if not number or not Claim.objects.filter(claim_number=number).exists():
+            raise
+        form.add_error("claim_number", "A claim with this claim number already exists.")
+        return render_form((form, diagnoses, lines), key, version, errors=True)
+    if claim:
+        messages.success(request, f"Claim {claim.claim_number} was submitted for review. No 837P has been sent.")
+        return redirect("claims:claim_detail", claim_id=claim.id)
+    messages.success(request, "Draft saved. You can return to it from the Claims dashboard.")
+    return redirect("claims:resume_draft", draft_id=key)
 
 
 @transaction.atomic
-def _save_capture_form(data, service_line_data, diagnosis_data):
+def _save_capture_form(data, service_line_data, diagnosis_data, *, actor):
     patient = Patient.objects.create(
         first_name=data["patient_first_name"],
         middle_name=data.get("patient_middle_name", ""),
@@ -314,8 +408,8 @@ def _save_capture_form(data, service_line_data, diagnosis_data):
     ClaimAuditEvent.objects.create(
         claim=claim,
         event_type="capture_created",
-        event_description="Claim was created from the CMS-1500 capture form.",
-        changed_by="system",
+        event_description="Claim was submitted for review from the CMS-1500 capture form.",
+        changed_by=actor,
     )
 
     return claim

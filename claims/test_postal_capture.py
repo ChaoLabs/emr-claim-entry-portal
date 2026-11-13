@@ -6,6 +6,7 @@ from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
 
+from .capture_test_helpers import submit_new_claim
 from claims.forms import CMS1500CaptureForm
 from claims.models import Claim
 from claims import tests as capture_tests
@@ -35,7 +36,7 @@ class PostalCaptureTests(TestCase):
         self.partner = TradingPartner.objects.get(name="Demo MAC Test")
 
     def capture(self):
-        response = self.client.post(reverse("claims:capture_claim"), self.data)
+        response = submit_new_claim(self.client, self.data)
         self.assertEqual(response.status_code, 302)
         return Claim.objects.get(claim_number=self.data["claim_number"])
 

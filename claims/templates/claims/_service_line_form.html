@@ -14,7 +14,7 @@
         <div class="form-field">{{ line_form.units.label_tag }}{{ line_form.units }}{{ line_form.units.errors }}</div>
     </div>
     <div class="line-relations">
-        <fieldset class="form-field relation-group"><legend>Related diagnoses <span class="required-note">Required</span></legend><p class="helptext">Choose from this claim's diagnoses, in the order they support this service.</p>{{ line_form.diagnosis_refs }}{{ line_form.diagnosis_refs.errors }}</fieldset>
+        <fieldset class="form-field relation-group"><legend>Related diagnoses <span class="required-note">Required to submit</span></legend><p class="helptext">Choose from this claim's diagnoses, in the order they support this service.</p>{{ line_form.diagnosis_refs }}{{ line_form.diagnosis_refs.errors }}</fieldset>
         <fieldset class="form-field relation-group"><legend>Modifiers <span class="optional-note">Optional</span></legend><p class="helptext">Add a two-character modifier only when it applies.</p>{{ line_form.modifier_codes }}{{ line_form.modifier_codes.errors }}</fieldset>
     </div>
 </article>

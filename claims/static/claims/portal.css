@@ -9,3 +9,5 @@
 @media print{body{background:white;color:black;font-size:10pt}.workspace-sidebar,.workspace-bar,.workspace-footer,.page-heading .heading-actions,.flow-strip,.handoff-bar,.document-tabs,.archive-integrity,.no-print,button,.messages{display:none!important}.workspace-body{margin:0;display:block}.workspace-main{padding:0;max-width:none}.card,.panel{box-shadow:none;border-color:#bbc7cd;break-inside:avoid}.document-panel{padding:14px}.document-summary,.document-masthead{padding:14px}.document-panel[hidden]{display:none!important}.data-table{min-width:0!important;font-size:9pt}.data-table th,.data-table td{padding:8px}.table-wrap{overflow:visible}a{color:inherit}.page-title{font-size:22pt}.reference-disclosure{display:none}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
 @media print{#claim-summary[hidden]{display:block!important}#original-x12{display:none!important}.panel{break-inside:auto}.data-table tr{break-inside:avoid}.document-table{overflow:visible}}
+
+.saved-drafts{margin-bottom:26px}.saved-drafts td:first-child{overflow-wrap:anywhere}.saved-drafts .text-link{white-space:nowrap}

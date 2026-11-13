@@ -6,6 +6,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from .capture_test_helpers import submit_new_claim
 from .models import (
     Claim,
     ClaimAuditEvent,
@@ -208,7 +209,7 @@ class ClaimCaptureWorkflowTests(TestCase):
         self.assertContains(response, "Add Service Line")
 
     def test_capture_claim_form_creates_claim_workflow_records(self):
-        response = self.client.post(reverse("claims:capture_claim"), data=self._capture_payload())
+        response = submit_new_claim(self.client, self._capture_payload())
 
         self.assertEqual(response.status_code, 302)
 
@@ -272,7 +273,7 @@ class ClaimCaptureWorkflowTests(TestCase):
                 )
             )
 
-        response = self.client.post(reverse("claims:capture_claim"), data=payload)
+        response = submit_new_claim(self.client, payload)
 
         self.assertEqual(response.status_code, 302)
         claim = Claim.objects.get(claim_number="CLM-TEST-MULTI-001")
@@ -294,7 +295,7 @@ class ClaimCaptureWorkflowTests(TestCase):
         payload.update(self._service_line_payload(1, charge_amount="75.00", modifier_1="59"))
         payload["service_lines-0-DELETE"] = "on"
 
-        response = self.client.post(reverse("claims:capture_claim"), data=payload)
+        response = submit_new_claim(self.client, payload)
 
         self.assertEqual(response.status_code, 302)
         claim = Claim.objects.get(claim_number="CLM-TEST-REMOVE-001")
@@ -309,7 +310,7 @@ class ClaimCaptureWorkflowTests(TestCase):
         )
         patient_count = Patient.objects.count()
 
-        response = self.client.post(reverse("claims:capture_claim"), data=self._capture_payload())
+        response = submit_new_claim(self.client, self._capture_payload())
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "A claim with this claim number already exists.")
@@ -324,7 +325,7 @@ class ClaimCaptureWorkflowTests(TestCase):
         payload["diagnoses-0-diagnosis_code"] = "ZZZ.99"
         payload["service_lines-0-procedure_code"] = "XXXXX"
 
-        response = self.client.post(reverse("claims:capture_claim"), data=payload)
+        response = submit_new_claim(self.client, payload)
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Review the highlighted claim fields")
@@ -337,7 +338,7 @@ class ClaimCaptureWorkflowTests(TestCase):
         payload = self._capture_payload()
         payload["service_lines-0-diagnosis_refs"] = ["99"]
 
-        response = self.client.post(reverse("claims:capture_claim"), data=payload)
+        response = submit_new_claim(self.client, payload)
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Select a diagnosis entered on this claim")
@@ -351,7 +352,7 @@ class ClaimCaptureWorkflowTests(TestCase):
         payload["payer_zip_code"] = "2770A"
         payload["payer_zip_code_extension"] = "12A4"
 
-        response = self.client.post(reverse("claims:capture_claim"), data=payload)
+        response = submit_new_claim(self.client, payload)
 
         self.assertEqual(response.status_code, 200)
         form = response.context["form"]
@@ -373,7 +374,7 @@ class ClaimCaptureWorkflowTests(TestCase):
         payload["claim_number"] = "CLM-TEST-ZIP5-001"
         payload["payer_zip_code_extension"] = ""
 
-        response = self.client.post(reverse("claims:capture_claim"), data=payload)
+        response = submit_new_claim(self.client, payload)
 
         self.assertEqual(response.status_code, 302)
         claim = Claim.objects.get(claim_number="CLM-TEST-ZIP5-001")

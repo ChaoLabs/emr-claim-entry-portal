@@ -8,6 +8,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from . import tests as capture_tests
+from .capture_test_helpers import submit_new_claim
 from .models import Claim
 from edi import context, validators
 from edi.models import TradingPartner, X12Document
@@ -51,7 +52,7 @@ class CaptureToExportTests(TestCase):
         return data
 
     def capture_and_generate(self, data):
-        response = self.client.post(reverse("claims:capture_claim"), data)
+        response = submit_new_claim(self.client, data)
         self.assertEqual(response.status_code, 302)
         claim = Claim.objects.get(claim_number=data["claim_number"])
         self.assertEqual(validators.validate(context.build(claim)), [])
@@ -102,7 +103,7 @@ class CaptureToExportTests(TestCase):
         fields = ("insured_date_of_birth", "insured_address_line_1", "insured_city", "insured_state", "insured_zip_code")
         for field in fields:
             data[field] = ""
-        response = self.client.post(reverse("claims:capture_claim"), data)
+        response = submit_new_claim(self.client, data)
         self.assertEqual(response.status_code, 200)
         for field in fields:
             self.assertIn(field, response.context["form"].errors)
@@ -113,7 +114,7 @@ class CaptureToExportTests(TestCase):
             with self.subTest(postal=postal):
                 data = self.exportable_payload(dependent=True)
                 data["insured_zip_code"] = postal
-                response = self.client.post(reverse("claims:capture_claim"), data)
+                response = submit_new_claim(self.client, data)
                 self.assertEqual(response.status_code, 200)
                 self.assertIn("insured_zip_code", response.context["form"].errors)
                 self.assertEqual(response.context["form"]["insured_address_line_1"].value(), "450 Subscriber Street")

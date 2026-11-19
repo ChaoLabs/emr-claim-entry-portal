@@ -319,7 +319,7 @@ class ClaimCaptureWorkflowTests(TestCase):
         self.assertEqual(Claim.objects.get(claim_number="CLM-TEST-POST-001"), existing_claim)
         self.assertEqual(Patient.objects.count(), patient_count)
 
-    def test_capture_rejects_codes_not_in_active_reference_data(self):
+    def test_capture_rejects_malformed_codes_without_partial_records(self):
         payload = self._capture_payload()
         payload["billing_provider_npi"] = "1234567890"
         payload["diagnoses-0-diagnosis_code"] = "ZZZ.99"
@@ -329,9 +329,9 @@ class ClaimCaptureWorkflowTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Review the highlighted claim fields")
-        self.assertContains(response, "NPI was not found in the active reference data")
-        self.assertContains(response, "Diagnosis code was not found")
-        self.assertContains(response, "Procedure code was not found")
+        self.assertContains(response, "NPI check digit is invalid")
+        self.assertContains(response, "Enter an ICD-10-CM code")
+        self.assertContains(response, "Enter a 5-character CPT / HCPCS code")
         self.assertFalse(Claim.objects.filter(claim_number="CLM-TEST-POST-001").exists())
 
     def test_capture_rejects_pointer_to_missing_diagnosis(self):

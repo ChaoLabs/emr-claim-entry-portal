@@ -128,7 +128,7 @@ class Command(BaseCommand):
             },
         )
         rendering_npi, _ = NpiReference.objects.update_or_create(
-            npi="1098765432",
+            npi="1098765435",
             defaults={
                 "entity_type": NpiReference.ENTITY_INDIVIDUAL,
                 "provider_name": "Jordan Lee",
@@ -234,7 +234,7 @@ class Command(BaseCommand):
         rendering_provider = Provider.objects.create(
             first_name="Jordan",
             last_name="Lee",
-            npi="1098765432",
+            npi="1098765435",
             npi_reference=rendering_npi,
             taxonomy_code="207Q00000X",
             city="Durham",

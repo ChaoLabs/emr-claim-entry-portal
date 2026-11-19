@@ -3,10 +3,13 @@ from decimal import Decimal
 import re
 from typing import Optional
 
+from django.core.exceptions import ValidationError
+
+from claims.code_validation import normalize_diagnosis, normalize_npi, normalize_procedure
+
 from . import codes, formatters
 
 BILLING_ZIP_DIGITS = 9
-NPI_DIGITS = 10
 PAYER_ZIP_DIGITS = (5, 9)
 
 
@@ -28,6 +31,38 @@ def _payer_postal_code(payer):
     return formatters.us_zip(payer.zip_code, getattr(payer, "zip_code_extension", ""))
 
 
+def _validate_npi(value, tag, label, line=None, required=True):
+    # Optional rendering providers retain their existing blank-NPI behavior.
+    # Validate every supplied NPI before formatters.digits can discard text.
+    if not required and not str(value or "").strip():
+        return []
+    try:
+        normalize_npi(value)
+    except ValidationError as exc:
+        return [Issue(tag, f"{label}: {'; '.join(exc.messages)}", line)]
+    return []
+
+
+def _validate_procedure_code(line, number):
+    if not formatters.clean(line.procedure_code):
+        return [Issue("2400 SV101", "service line has no procedure code", number)]
+    try:
+        normalize_procedure(line.procedure_code)
+    except ValidationError as exc:
+        return [Issue("2400 SV101", "; ".join(exc.messages), number)]
+    return []
+
+
+def _validate_line_rendering_npi(context, line, number):
+    renderer = line.rendering_provider
+    if renderer and renderer != context.rendering:
+        return _validate_npi(
+            renderer.npi, "2420A NM109", "Service-line rendering provider NPI",
+            number, required=False,
+        )
+    return []
+
+
 def validate_billing_provider(billing):
     if billing is None:
         return [Issue("2010AA", "no billing provider on the claim")]
@@ -46,9 +81,7 @@ def validate_billing_provider(billing):
             "sufficient for this export. Do not add arbitrary digits.",
         ))
 
-    npi = formatters.digits(billing.npi)
-    if len(npi) != NPI_DIGITS:
-        out.append(Issue("2010AA NM109", f"billing NPI '{billing.npi}' is not {NPI_DIGITS} digits"))
+    out.extend(_validate_npi(billing.npi, "2010AA NM109", "Billing provider NPI"))
 
     if not re.fullmatch(r"(?:[0-9]{9}|[0-9]{2}-[0-9]{7})", str(billing.tax_id or "").strip()):
         out.append(Issue(
@@ -127,6 +160,18 @@ def validate_diagnoses(context):
     elif len(context.diagnoses) > 12:
         out.append(Issue("2300 HI", "this exporter supports at most 12 diagnoses"))
 
+    # Local reference data is a lookup aid, not an exhaustive code set.
+    # Apply syntax checks to snapshots as well as form input, including imports
+    # and Admin changes that did not go through claim capture.
+    for diagnosis in context.diagnoses:
+        try:
+            normalize_diagnosis(diagnosis.diagnosis_code)
+        except ValidationError as exc:
+            out.append(Issue(
+                "2300 HI",
+                f"Diagnosis {diagnosis.diagnosis_order}: {'; '.join(exc.messages)}",
+            ))
+
     seen = [formatters.diagnosis(dx.diagnosis_code) for dx in context.diagnoses]
     for code in sorted({c for c in seen if seen.count(c) > 1}):
         out.append(Issue("2300 HI", f"diagnosis code {code} appears more than once"))
@@ -150,9 +195,8 @@ def validate_totals(context):
 
 
 def validate_service_line(context, line, number):
-    out = []
-    if not formatters.clean(line.procedure_code):
-        out.append(Issue("2400 SV101", "service line has no procedure code", number))
+    out = _validate_procedure_code(line, number)
+    out.extend(_validate_line_rendering_npi(context, line, number))
 
     if line.charge_amount is None:
         out.append(Issue("2400 SV102", "service line has no charge amount", number))
@@ -198,17 +242,25 @@ def validate_line_relationships(context, line, number):
 
 
 def ensure_export_relationships(context, line=None, number=None):
-    """Never let --force/--ignore produce an unrepresentable relationship.
+    """Never let --force/--ignore lose relationships or alter malformed codes.
 
     Also called by builders used outside the management command. No truncation,
     re-numbering, splitting or dropping diagnoses/modifiers is performed.
     """
     issues = validate_diagnoses(context)
+    if context.billing:
+        issues.extend(_validate_npi(context.billing.npi, "2010AA NM109", "Billing provider NPI"))
+    if context.rendering:
+        issues.extend(_validate_npi(
+            context.rendering.npi, "2310B NM109", "Rendering provider NPI", required=False,
+        ))
     lines = [(number, line)] if line is not None else enumerate(context.service_lines, start=1)
     for line_number, service_line in lines:
+        issues.extend(_validate_procedure_code(service_line, line_number))
+        issues.extend(_validate_line_rendering_npi(context, service_line, line_number))
         issues.extend(validate_line_relationships(context, service_line, line_number))
     if issues:
-        raise ValueError("Cannot represent captured relationships in 837P: " + "; ".join(str(issue) for issue in issues))
+        raise ValueError("Cannot represent captured claim data in 837P: " + "; ".join(str(issue) for issue in issues))
 
 
 def validate(context):
@@ -220,6 +272,11 @@ def validate(context):
     if not number or len(number) > 38:
         out.append(Issue("2300 CLM01", "claim number must be 1 to 38 characters"))
     out.extend(validate_billing_provider(context.billing))
+    if context.rendering:
+        out.extend(_validate_npi(
+            context.rendering.npi, "2310B NM109", "Rendering provider NPI",
+            required=False,
+        ))
     out.extend(validate_payer(context.payer))
     out.extend(validate_subscriber(context))
     out.extend(validate_patient(context))

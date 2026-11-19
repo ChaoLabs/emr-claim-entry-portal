@@ -21,6 +21,7 @@ from edi import builders, context, envelope, segments, validators
 from edi.management.commands.generate_837p import Command as ExportCommand
 from edi.models import ControlNumber, TradingPartner, X12Document
 from .models import Claim, ClaimAuditEvent
+from .reference_checks import reference_report
 
 
 class GenerateForm(forms.Form):
@@ -79,6 +80,7 @@ def submission(request, claim_id):
         "claim": claim, "form": form, "issues": issues, "archives": archives_for(claim),
         "has_partners": partners.exists(), "billing_provider": ctx.billing,
         "billing_needs_review": any(issue.tag.startswith("2010AA") for issue in issues),
+        **reference_report(claim),
     })
 
 

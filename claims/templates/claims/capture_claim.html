@@ -84,7 +84,7 @@
 <div class="claim-capture">
     <div class="capture-breadcrumb"><a href="{% url 'claims:dashboard' %}">Claims</a><span aria-hidden="true">/</span><span>{% if draft %}Edit draft{% else %}New claim{% endif %}</span></div>
     <div class="capture-heading"><div><div class="capture-eyebrow">Claim preparation</div><h2>{% if draft %}Edit draft{% else %}New claim{% endif %}</h2><p>Save your progress{% if request.user.is_authenticated %} to your account{% else %} in this browser session{% endif %}. When the claim is complete, submit it for review. <a href="#capture-actions">Go to Save and Submit</a></p>{% if draft %}<p>Last saved {{ draft.updated_at|date:"M j, Y · H:i T" }}</p>{% endif %}</div><ol class="capture-steps" aria-label="Claim preparation steps"><li aria-current="step"><span>1</span>Enter details</li><li><span>2</span>Review claim</li><li><span>3</span>Prepare 837P</li></ol></div>
-    <div class="validation-note"><strong>Use fictional patient information only.</strong> Provider, diagnosis and procedure codes are checked when you submit.</div>
+    <div class="validation-note"><strong>Use fictional patient information only.</strong> Enter ICD-10-CM, CPT / HCPCS and NPI values even if they are not in the local reference list. Submit checks their format; unmatched references are marked for review. Diagnosis codes may be entered with or without the decimal.</div>
     {% if draft_conflict %}
     <div class="form-error-summary" role="alert"><h3>This form is out of date</h3><p>{{ draft_conflict }}</p>{% if draft %}<a href="{% url 'claims:resume_draft' draft.id %}" target="_blank" rel="noopener">Open the latest version in a new tab</a>{% endif %}</div>
     {% endif %}

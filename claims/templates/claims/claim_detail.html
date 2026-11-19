@@ -70,12 +70,13 @@
         <div><div class="review-eyebrow">Claim preparation</div><h2>Review claim</h2><p>Check the captured information and the diagnoses supporting each service before preparing the X12 file.</p></div>
         <div class="review-actions"><button type="button" class="review-secondary" id="print-claim">Print claim</button>{% if request.user.is_staff %}<a href="{% url 'workflow:submission' claim.pk %}" class="button">Prepare 837P <span aria-hidden="true">&rarr;</span></a>{% endif %}</div>
     </div>
+    {% include 'claims/_reference_review.html' %}
     <article class="review-sheet" aria-label="Claim data review">
         <div class="review-sheet-header"><div><h3>{{ claim.claim_number|default:claim.id }}</h3><p>CMS-1500 claim data &middot; Saved {{ claim.created_at|date:"M j, Y · g:i A" }}</p></div><span class="review-state">{{ claim.get_status_display }}</span></div>
         <dl class="review-facts">
             <div><dt>Patient</dt><dd>{{ claim.patient }}</dd></div>
             <div><dt>Service period</dt><dd>{{ claim.service_start_date|date:"M j, Y"|default:"Not entered" }}{% if claim.service_end_date and claim.service_end_date != claim.service_start_date %}<br>to {{ claim.service_end_date|date:"M j, Y" }}{% endif %}</dd></div>
-            <div><dt>Reference checks</dt><dd>{% if claim.validation_status == "reference_validated" %}Reference validated{% else %}{{ claim.validation_status|default:"Not recorded" }}{% endif %}</dd></div>
+            <div><dt>Reference checks</dt><dd>{{ reference_status_label }}</dd></div>
             <div><dt>Total charge</dt><dd class="review-total">${{ claim.total_charge_amount }}</dd></div>
         </dl>
         <section class="review-section">

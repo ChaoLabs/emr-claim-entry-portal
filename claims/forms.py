@@ -3,14 +3,12 @@ import re
 from django import forms
 from django.utils.html import format_html, format_html_join
 
+from .code_validation import normalize_diagnosis, normalize_npi, normalize_procedure
 from .models import (
     Claim,
-    Icd10Code,
-    NpiReference,
     PAYER_STATE_CODE_VALIDATOR,
     PAYER_ZIP_CODE_EXTENSION_VALIDATOR,
     PAYER_ZIP_CODE_VALIDATOR,
-    ProcedureCode,
 )
 
 
@@ -62,10 +60,7 @@ class DiagnosisCaptureForm(forms.Form):
     description = forms.CharField(label="Description (optional)", max_length=255, required=False)
 
     def clean_diagnosis_code(self):
-        code = self.cleaned_data["diagnosis_code"].strip().upper()
-        if not Icd10Code.objects.filter(code=code, is_active=True).exists():
-            raise forms.ValidationError("Diagnosis code was not found in the active ICD-10-CM reference data.")
-        return code
+        return normalize_diagnosis(self.cleaned_data["diagnosis_code"])
 
 
 class BaseDiagnosisFormSet(forms.BaseFormSet):
@@ -108,10 +103,11 @@ class ServiceLineCaptureForm(forms.Form):
         start, end = cleaned.get("service_line_from_date"), cleaned.get("service_line_to_date")
         if start and end and end < start:
             self.add_error("service_line_to_date", "Service line end date cannot be before service line start date.")
-        code = (cleaned.get("procedure_code") or "").strip().upper()
-        cleaned["procedure_code"] = code
-        if code and not ProcedureCode.objects.filter(code=code, is_active=True).exists():
-            self.add_error("procedure_code", "Procedure code was not found in the active CPT / HCPCS reference data.")
+        if cleaned.get("procedure_code"):
+            try:
+                cleaned["procedure_code"] = normalize_procedure(cleaned["procedure_code"])
+            except forms.ValidationError as exc:
+                self.add_error("procedure_code", exc)
         refs = cleaned.get("diagnosis_refs", [])
         if any(ref not in self.valid_diagnosis_refs for ref in refs):
             self.add_error("diagnosis_refs", "Select a diagnosis entered on this claim. A selected diagnosis may have been removed or needs correction.")
@@ -283,7 +279,7 @@ class CMS1500CaptureForm(forms.Form):
         label="Billing Provider NPI",
         max_length=20,
         required=False,
-        help_text="If entered, the NPI must match an active NPI reference record.",
+        help_text="Enter a 10-digit NPI with a valid check digit. An NPI outside the local reference list can be submitted for review.",
     )
     billing_provider_taxonomy_code = forms.CharField(
         label="Billing Provider Taxonomy Code",
@@ -320,7 +316,7 @@ class CMS1500CaptureForm(forms.Form):
         label="Rendering Provider NPI",
         max_length=20,
         required=False,
-        help_text="If entered, the NPI must match an active NPI reference record.",
+        help_text="Enter a 10-digit NPI with a valid check digit. An NPI outside the local reference list can be submitted for review.",
     )
 
     # Claim header
@@ -399,10 +395,9 @@ class CMS1500CaptureForm(forms.Form):
             cleaned_data[field_name] = npi
             if not npi:
                 continue
-            if len(npi) != 10 or not npi.isdigit():
-                self.add_error(field_name, "NPI must contain exactly 10 digits.")
-                continue
-            if not NpiReference.objects.filter(npi=npi, is_active=True).exists():
-                self.add_error(field_name, "NPI was not found in the active reference data.")
+            try:
+                cleaned_data[field_name] = normalize_npi(npi)
+            except forms.ValidationError as exc:
+                self.add_error(field_name, exc)
 
         return cleaned_data

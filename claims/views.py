@@ -14,6 +14,7 @@ from edi import context as edi_context, validators as edi_validators
 
 from . import drafts
 from .forms import CMS1500CaptureForm, DiagnosisCaptureFormSet, ServiceLineCaptureFormSet
+from .reference_checks import find_diagnosis_reference, reference_report
 from .models import (
     CaptureDraft,
     Claim,
@@ -125,6 +126,7 @@ def claim_detail(request, claim_id):
     return render(request, "claims/claim_detail.html", {
         "claim": claim,
         "edi_issues": edi_validators.validate(edi_context.build(claim)),
+        **reference_report(claim),
     })
 
 
@@ -335,11 +337,7 @@ def _save_capture_form(data, service_line_data, diagnosis_data, *, actor):
         claim_number=claim_number,
         patient=patient,
         status=Claim.STATUS_READY_FOR_REVIEW,
-        validation_status="reference_validated",
-        validation_message=(
-            "CMS-1500 capture completed. Supplied NPI, ICD-10-CM, and procedure codes "
-            "matched active reference records."
-        ),
+        validation_status="reference_pending",
         service_start_date=data.get("service_start_date"),
         service_end_date=data.get("service_end_date"),
         total_charge_amount=total_charge_amount,
@@ -379,7 +377,7 @@ def _save_capture_form(data, service_line_data, diagnosis_data, *, actor):
     diagnoses_by_key = {}
     for index, diagnosis in enumerate(diagnosis_data, start=1):
         code = diagnosis["diagnosis_code"]
-        reference = Icd10Code.objects.filter(code=code, is_active=True).first()
+        reference = find_diagnosis_reference(code)
         diagnoses_by_key[diagnosis["row_key"]] = ClaimDiagnosis.objects.create(
             claim=claim, diagnosis_code=code, icd10_reference=reference,
             diagnosis_order=index,
@@ -405,10 +403,15 @@ def _save_capture_form(data, service_line_data, diagnosis_data, *, actor):
         for position, code in enumerate(line["modifier_codes"], start=1):
             ServiceLineModifier.objects.create(service_line=service_line, code=code, position=position)
 
+    report = reference_report(claim)
+    claim.validation_status = report["validation_status"]
+    claim.validation_message = report["validation_message"]
+    claim.save(update_fields=["validation_status", "validation_message"])
+
     ClaimAuditEvent.objects.create(
         claim=claim,
         event_type="capture_created",
-        event_description="Claim was submitted for review from the CMS-1500 capture form.",
+        event_description="Claim was submitted for review from the CMS-1500 capture form. " + claim.validation_message,
         changed_by=actor,
     )
 

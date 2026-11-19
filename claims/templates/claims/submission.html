@@ -7,6 +7,7 @@
 <section class="panel"><div class="panel-head"><h2>File preparation</h2><span class="badge {% if issues or not has_partners %}warning{% endif %}">{% if issues or not has_partners %}Review required{% else %}Checks passed{% endif %}</span></div><div class="panel-body">
     <dl class="review-kv" style="margin-bottom:25px"><div><dt>Claim number</dt><dd>{{ claim.claim_number }}</dd></div><div><dt>Patient</dt><dd>{{ claim.patient }}</dd></div><div><dt>Total charge</dt><dd>${{ claim.total_charge_amount }}</dd></div></dl>
     {% if issues %}<div class="notice warning"><strong>Resolve these items before generation</strong><ul class="issue-list">{% for issue in issues %}<li>{{ issue }}</li>{% endfor %}</ul></div>{% endif %}
+    {% include 'claims/_reference_review.html' %}
     {% if billing_needs_review %}
     <p class="small muted">A 5-digit ZIP is enough to save a claim. US billing addresses need ZIP+4 before 837P generation; patient, subscriber and payer addresses may use 5 digits.</p>
     {% if billing_provider and perms.claims.change_provider %}<p><a class="text-link" href="{% url 'admin:claims_provider_change' billing_provider.pk %}" target="_blank" rel="noopener">Review billing provider in Admin ↗</a></p>{% else %}<p class="small muted">Ask an administrator to correct the billing provider record.</p>{% endif %}

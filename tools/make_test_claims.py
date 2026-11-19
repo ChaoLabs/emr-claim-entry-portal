@@ -58,7 +58,7 @@ def create():
         group_number="GRP-9", plan_name="Demo PPO", policy_type="commercial",
     )
     billing = Provider.objects.create(
-        organization_name="Second Demo Clinic", npi="1098765432",
+        organization_name="Second Demo Clinic", npi="1098765435",
         taxonomy_code="207Q00000X", tax_id="561234567",
         address_line_1="9 Clinic Road", city="Cary", state="NC",
         zip_code="275111234",

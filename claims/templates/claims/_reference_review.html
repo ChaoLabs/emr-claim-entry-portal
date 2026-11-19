@@ -1,0 +1,8 @@
+{% if reference_warnings %}
+<div class="notice warning" role="status">
+    <strong>Reference review needed</strong>
+    <p>An incomplete local reference list does not restrict which codes you can enter. Resolve any format errors separately before generating an 837P file.</p>
+    <ul>{% for warning in reference_warnings %}<li>{{ warning }}</li>{% endfor %}</ul>
+    <p class="small">Format checks do not confirm that a code is billable for the service date, that an NPI is registered, or that a payer will accept the claim.</p>
+</div>
+{% endif %}
